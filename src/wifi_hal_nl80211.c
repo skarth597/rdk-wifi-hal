@@ -13095,7 +13095,10 @@ int wifi_drv_set_operstate(void *priv, int state)
     }
 #else
     if ((interface->vap_configured == true)  && (vap->vap_mode == wifi_vap_mode_sta)) {
-        close(interface->u.sta.sta_sock_fd);
+	 if (interface->u.sta.sta_sock_fd != 0) {
+             close(interface->u.sta.sta_sock_fd);
+             interface->u.sta.sta_sock_fd = 0;
+         }
     }
     sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock_fd < 0) {
