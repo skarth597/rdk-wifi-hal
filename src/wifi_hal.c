@@ -1077,6 +1077,7 @@ int init_wpa_supplicant(wifi_interface_info_t *interface)
 
     interface->wpa_s.driver = &g_wpa_supplicant_driver_nl80211_ops;
     dl_list_init(&interface->wpa_s.bss);
+    dl_list_init(&interface->wpa_s.bss_tmp_disallowed);
 
     return RETURN_OK;
 }
