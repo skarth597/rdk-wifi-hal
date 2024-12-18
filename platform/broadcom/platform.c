@@ -1147,8 +1147,8 @@ static int platform_set_hostap_ctrl(wifi_radio_info_t *radio, uint vap_index, in
 
     if (enable) {
         assoc_ctrl = ASSOC_HOSTAP_FULL_CTRL;
-    } else if (radio->oper_param.band != WIFI_FREQUENCY_6_BAND &&
-        is_wifi_hal_vap_hotspot_open(vap_index) && is_wifi_hal_vap_hotspot_secure(vap_index)) {
+    } else if (is_wifi_hal_vap_hotspot_open(vap_index) ||
+        is_wifi_hal_vap_hotspot_secure(vap_index)) {
         assoc_ctrl = ASSOC_HOSTAP_STATUS_CTRL;
     } else {
         assoc_ctrl = ASSOC_DRIVER_CTRL;
