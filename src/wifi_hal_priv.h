@@ -101,6 +101,11 @@ extern "C" {
 #else
     #define HOSTAPD_VERSION 209
 #endif
+
+#ifdef CONFIG_WIFI_EMULATOR
+#define MAX_NUM_SIMULATED_CLIENT (MAX_NUM_RADIOS*100)
+#endif
+
 /*
  * Copyright (c) 2003-2013, Jouni Malinen <j@w1.fi>
  * Licensed under the BSD-3 License
@@ -596,7 +601,11 @@ typedef struct {
     struct nl_handle *nl_event;
     unsigned int port_bitmap[32];
     unsigned int num_radios;
+#ifdef CONFIG_WIFI_EMULATOR
+     wifi_radio_info_t radio_info[MAX_NUM_SIMULATED_CLIENT];
+#else
     wifi_radio_info_t radio_info[MAX_NUM_RADIOS];
+#endif
     wifi_device_callbacks_t device_callbacks;
     wifi_hal_platform_flags_t platform_flags;
     pthread_mutex_t	nl_create_socket_lock;
@@ -759,6 +768,8 @@ INT wifi_hal_wps_pin_init(char *pin);
 INT wifi_hal_hostApGetErouter0Mac(char *out);
 INT wifi_hal_send_mgmt_frame_response(int ap_index, int type, int status, int status_code, uint8_t *frame, uint8_t *mac, int len, int rssi);
 void wifi_hal_deauth(int vap_index, int status, uint8_t *mac);
+INT wifi_hal_getInterfaceMap(wifi_interface_name_idex_map_t *if_map, unsigned int max_entries,
+    unsigned int *if_map_size);
 INT wifi_hal_getHalCapability(wifi_hal_capability_t *hal);
 INT wifi_hal_connect(INT ap_index, wifi_bss_info_t *bss);
 INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
@@ -955,6 +966,7 @@ int nl80211_disconnect_sta(wifi_interface_info_t *interface);
 int wifi_hal_purgeScanResult(unsigned int vap_index, unsigned char *sta_mac);
 void get_wifi_interface_info_map(wifi_interface_name_idex_map_t *interface_map);
 void get_radio_interface_info_map(radio_interface_mapping_t *radio_interface_map);
+unsigned int get_sizeof_interfaces_index_map(void);
 int validate_radio_operation_param(wifi_radio_operationParam_t *param);
 int validate_wifi_interface_vap_info_params(wifi_vap_info_t *vap_info, char *msg, int len);
 int is_backhaul_interface(wifi_interface_info_t *interface);
