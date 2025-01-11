@@ -51,7 +51,8 @@ static unsigned int interface_index_map_size;
 static const wifi_interface_name_idex_map_t static_interface_index_map[] = {
 #ifdef RASPBERRY_PI_PORT
 #if defined(PLATFORM_LINUX)
-    {0, 0,  "wlan0",     "brlan0",    0,    0,     "private_ssid_2g"},
+    //{0, 0,  "wlan0",     "brlan0",    0,    0,     "private_ssid_2g"},
+    {0, 0,  "wlan0",     "brlan0",    0,    14,     "mesh_sta_2g"},
 #else
     {0, 0,  "wlan0",     "brlan0",    0,    0,     "private_ssid_2g"},
     {1, 1,  "wlan1",     "brlan0",    0,    1,      "private_ssid_5g"},
@@ -1447,7 +1448,8 @@ wifi_interface_info_t* get_private_vap_interface(wifi_radio_info_t *radio)
 
     while (interface != NULL) {
         vap = &interface->vap_info;
-        if (!strncmp(vap->vap_name, "private_ssid_", sizeof("private_ssid_")-1)) {
+        //if (!strncmp(vap->vap_name, "private_ssid_", sizeof("private_ssid_")-1)) {
+        if (!strncmp(vap->vap_name, "mesh_sta_", sizeof("mesh_sta_")-1)) {
             return interface;
         }
 

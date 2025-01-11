@@ -447,10 +447,17 @@ typedef struct wifi_interface_info_t {
     int bss_nl_connect_event_fd;
     struct nl_cb *bss_nl_cb;
 
+#if 0
     union {
         wifi_ap_priv_t  ap;
         wifi_sta_priv_t sta;
     } u;
+#else
+   struct {
+        wifi_ap_priv_t  ap;
+        wifi_sta_priv_t sta;
+   } u;
+#endif
 
     char   wpa_passphrase[64];
     char   device_name[64], manufacturer[64], model_name[64], model_number[64];
@@ -1021,6 +1028,8 @@ int wifi_drv_sta_deauth(void *priv, const u8 *own_addr, const u8 *addr, u16 reas
                                           const u16 *csa_offs,
                                           size_t csa_offs_len);
 #endif
+
+int set_sta_wifi_security_cfg(uint32_t vap_index, wifi_vap_security_t *p_recv_security);
 
 BOOL is_wifi_hal_vap_private(UINT ap_index);
 BOOL is_wifi_hal_vap_xhs(UINT ap_index);

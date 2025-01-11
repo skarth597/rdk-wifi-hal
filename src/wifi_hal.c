@@ -1146,6 +1146,8 @@ INT _wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 #endif
 {
+    wifi_hal_error_print("%s:%d: Create VAP for NON-PLATFORM_RASPBERRYPI platfrom \n", __func__, __LINE__);
+
     wifi_radio_info_t *radio;
     wifi_interface_info_t *interface;
     wifi_vap_info_t *vap;
@@ -1500,7 +1502,6 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             radio->index);
         set_vap_params_fn(index, map);
     }
-
     return RETURN_OK;
 }
 
@@ -2073,7 +2074,7 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
     wifi_radio_operationParam_t *radio_param;
     char country[8] = {0}, tmp_str[32] = {0}, chan_list_str[512] = {0};
     unsigned int freq_list[32], i;
-    ssid_t  ssid_list[8];
+    ssid_t  ssid_list[8] = { 0 };
 
     wifi_hal_dbg_print("%s:%d: index: %d mode: %d dwell time: %d\n", __func__, __LINE__, index,
         scan_mode, dwell_time);
@@ -2140,7 +2141,9 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
     strcpy(ssid_list[0], vap->u.sta_info.ssid);
     wifi_hal_info_print("%s:%d: Scan Frequencies:%s \n", __func__, __LINE__, chan_list_str);
 
-    return (nl80211_start_scan(interface, 0, num, freq_list, dwell_time, 1, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
+    memset(ssid_list, 0, sizeof(ssid_list));
+    return (nl80211_start_scan(interface, 0, num, freq_list, dwell_time, 0, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
+    //return (nl80211_start_scan(interface, 0, num, freq_list, dwell_time, 0, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
 }
 
 /*****************************/
@@ -4152,4 +4155,23 @@ int steering_set_acl_mode(uint32_t apIndex, uint32_t mac_filter_mode)
     }
 
     return (nl80211_set_acl_mode(interface, mac_filter_mode));
+}
+
+int set_sta_wifi_security_cfg(uint32_t vap_index, wifi_vap_security_t *p_recv_security)
+{
+    wifi_interface_info_t *interface = get_interface_by_vap_index(vap_index);
+
+    printf(":%s:%d interface:%p security key new:%s for vap:%d\n", __func__, __LINE__, interface, p_recv_security->u.key.key, vap_index);
+    if (interface == NULL) {
+        wifi_hal_error_print(":%s:%d interface not found for vap:%d\n", __func__, __LINE__, vap_index);
+        return RETURN_ERR;
+    } else {
+        wifi_vap_security_t *p_security = &interface->vap_info.u.sta_info.security;
+
+        printf(":%s:%d security key old:%s new:%s for vap:%d\n", __func__, __LINE__, p_security->u.key.key, p_recv_security->u.key.key, vap_index);
+        strcpy(p_security->u.key.key, p_recv_security->u.key.key);
+        printf(":%s:%d new security key:%s\n", __func__, __LINE__, p_security->u.key.key);
+    }
+
+    return RETURN_OK;
 }

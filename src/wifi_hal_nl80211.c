@@ -2405,6 +2405,8 @@ void recv_data_frame(wifi_interface_info_t *interface)
         wpa_supplicant_event(&interface->u.ap.hapd, EVENT_EAPOL_RX, &event);
         pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
     } else if (vap->vap_mode == wifi_vap_mode_sta) {
+    	printf("IN %s():%d. About to call wpa_sm_rx_eapol \n", __func__, __LINE__);
+
         if (interface->u.sta.wpa_sm) {
 #if HOSTAPD_VERSION >= 211 //2.11
             if (!interface->u.sta.wpa_sm->eapol || !eapol_sm_rx_eapol(interface->u.sta.wpa_sm->eapol,(unsigned char *)&sta,
@@ -7075,22 +7077,21 @@ static int scan_results_handler(struct nl_msg *msg, void *arg)
         // STA mode: filter result
         scan_info = hash_map_get_first(interface->scan_info_map);
         while (scan_info != NULL) {
-            if (strcmp(scan_info->ssid, interface->vap_info.u.sta_info.ssid) == 0){
-                bss[desired_scanned_ssid_pos] = *scan_info;
-                ssid_found_count++;
-                desired_scanned_ssid_pos++;
-            }
+            wifi_hal_dbg_print("%s:%d: [SCAN] ssid:%s, interface->vap_info.u.sta_info.ssid:%s, freq->%d\n", __func__, __LINE__, scan_info->ssid, interface->vap_info.u.sta_info.ssid, scan_info->freq);
+            bss[desired_scanned_ssid_pos] = *scan_info;
+            ssid_found_count++;
+            desired_scanned_ssid_pos++;
             scan_info = hash_map_get_next(interface->scan_info_map, scan_info);
         }
         pthread_mutex_unlock(&interface->scan_info_mutex);
-        wifi_hal_dbg_print("%s:%d: [SCAN] scan found %u results with ssid:%s\n", __func__, __LINE__, ssid_found_count, interface->vap_info.u.sta_info.ssid);
+        wifi_hal_dbg_print("%s:%d: [SCAN] scan_found_count:%u, count:%d, results with ssid:%s\n", __func__, __LINE__, ssid_found_count, count, interface->vap_info.u.sta_info.ssid);
     }
     else {
         // AP mode: copy all
         unsigned total_ap_count;
         scan_info = hash_map_get_first(interface->scan_info_map);
         while (scan_info != NULL) {
-            // wifi_hal_dbg_print("%s:%d: [SCAN] ssid:%s, freq->%d\n", scan_info->ssid, scan_info->freq, __func__, __LINE__);
+            // wifi_hal_dbg_print("%s:%d: [SCAN] ssid:%s, freq->%d\n", __func__, __LINE__, scan_info->ssid, scan_info->freq);
             bss[desired_scanned_ssid_pos] = *scan_info;
             ssid_found_count++;
             desired_scanned_ssid_pos++;
@@ -7111,6 +7112,7 @@ static int scan_results_handler(struct nl_msg *msg, void *arg)
             if (!new_bss) {
                 // - error, but not critical, original array still is valid
                 wifi_hal_error_print("%s:%d: [SCAN] memory re-allocation error!\n", __func__, __LINE__);
+		perror("realloc failed");
             }
             else
                 bss = new_bss;
@@ -8018,9 +8020,8 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
         return -1;
     }
 
-
-    wifi_hal_dbg_print("%s:%d:bssid:%s frequency:%d ssid:%s\n", __func__, __LINE__,
-            to_mac_str(backhaul->bssid, bssid_str), backhaul->freq, backhaul->ssid);
+    wifi_hal_dbg_print("RDK_WIFI_HAL: %s:%d:bssid:%s frequency:%d ssid:%s, password:%s\n", __func__, __LINE__,
+            to_mac_str(backhaul->bssid, bssid_str), backhaul->freq, backhaul->ssid, security->u.key.key);
 
     nla_put(msg, NL80211_ATTR_SSID, strlen(backhaul->ssid), backhaul->ssid);
     nla_put(msg, NL80211_ATTR_MAC, sizeof(backhaul->bssid), backhaul->bssid);
@@ -8046,9 +8047,12 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
             wpa_conf.wpa_key_mgmt = key_mgmt;
         }
 
-        wifi_hal_dbg_print("update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
+        wifi_hal_dbg_print("===>update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
                 key_mgmt);
     } else {
+	security->mode = backhaul->sec_mode;
+    	printf("security->mode:%d, security->key.key:%s, backhaul->enc_method:%d!!\n", security->mode, security->u.key.key, backhaul->enc_method);
+
         if (security->mode == wifi_security_mode_none) {
             wpa_conf.wpa_key_mgmt = WPA_KEY_MGMT_NONE;
             wpa_conf.wpa_group = WPA_CIPHER_NONE;
