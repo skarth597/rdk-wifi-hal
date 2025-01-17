@@ -101,6 +101,11 @@ extern "C" {
 #else
     #define HOSTAPD_VERSION 209
 #endif
+
+#ifdef CONFIG_WIFI_EMULATOR
+#define MAX_NUM_SIMULATED_CLIENT (MAX_NUM_RADIOS*100)
+#endif
+
 /*
  * Copyright (c) 2003-2013, Jouni Malinen <j@w1.fi>
  * Licensed under the BSD-3 License
@@ -187,9 +192,17 @@ extern "C" {
 
 /* 5GHz radio */
 #define MIN_FREQ_MHZ_5G             5180
+#ifndef _PLATFORM_BANANAPI_R4_
 #define MAX_FREQ_MHZ_5G             5825
+#else //_PLATFORM_BANANAPI_R4_
+#define MAX_FREQ_MHZ_5G             5885
+#endif //_PLATFORM_BANANAPI_R4_
 #define MIN_CHANNEL_5G              36
+#ifndef _PLATFORM_BANANAPI_R4_
 #define MAX_CHANNEL_5G              165
+#else //_PLATFORM_BANANAPI_R4_
+#define MAX_CHANNEL_5G              177
+#endif //_PLATFORM_BANANAPI_R4_
 
 /* 6GHz radio */
 #define MIN_FREQ_MHZ_6G             5935
@@ -409,6 +422,7 @@ typedef struct wifi_interface_info_t {
     char bridge[32];
     unsigned int index;
     unsigned int phy_index;
+    unsigned int rdk_radio_index;
     mac_address_t   mac;
     unsigned int type;
     unsigned int interface_status;
@@ -587,7 +601,11 @@ typedef struct {
     struct nl_handle *nl_event;
     unsigned int port_bitmap[32];
     unsigned int num_radios;
+#ifdef CONFIG_WIFI_EMULATOR
+     wifi_radio_info_t radio_info[MAX_NUM_SIMULATED_CLIENT];
+#else
     wifi_radio_info_t radio_info[MAX_NUM_RADIOS];
+#endif
     wifi_device_callbacks_t device_callbacks;
     wifi_hal_platform_flags_t platform_flags;
     pthread_mutex_t	nl_create_socket_lock;
@@ -750,6 +768,8 @@ INT wifi_hal_wps_pin_init(char *pin);
 INT wifi_hal_hostApGetErouter0Mac(char *out);
 INT wifi_hal_send_mgmt_frame_response(int ap_index, int type, int status, int status_code, uint8_t *frame, uint8_t *mac, int len, int rssi);
 void wifi_hal_deauth(int vap_index, int status, uint8_t *mac);
+INT wifi_hal_getInterfaceMap(wifi_interface_name_idex_map_t *if_map, unsigned int max_entries,
+    unsigned int *if_map_size);
 INT wifi_hal_getHalCapability(wifi_hal_capability_t *hal);
 INT wifi_hal_connect(INT ap_index, wifi_bss_info_t *bss);
 INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam);
@@ -883,6 +903,7 @@ int     wifi_send_eapol(void *priv, const u8 *addr, const u8 *data,
                     size_t data_len, int encrypt,
                     const u8 *own_addr, u32 flags);
 void   *wifi_drv_init(struct hostapd_data *hapd, struct wpa_init_params *params);
+struct nl_msg *nl80211_drv_cmd_msg(int nl80211_id, wifi_interface_info_t *intf, int flags, uint8_t cmd);
 struct nl_msg *nl80211_drv_vendor_cmd_msg(int nl80211_id, wifi_interface_info_t *intf, int flags,
     uint32_t vendor_id, uint32_t subcmd);
 int nl80211_send_and_recv(struct nl_msg *msg, int (*valid_handler)(struct nl_msg *, void *),
@@ -935,7 +956,6 @@ int     wifi_set_ap_wps_ie(void *priv, const struct wpabuf *beacon,
                       const struct wpabuf *assocresp);
 int     wifi_sta_get_seqnum(const char *ifname, void *priv, const u8 *addr, int idx, u8 *seq);
 int     wifi_commit(void *priv);
-wifi_radio_info_t *get_radio_by_phy_index(wifi_radio_index_t index);
 wifi_radio_info_t *get_radio_by_rdk_index(wifi_radio_index_t index);
 int set_interface_properties(unsigned int phy_index, wifi_interface_info_t *interface);
 int get_op_class_from_radio_params(wifi_radio_operationParam_t *param);
@@ -946,6 +966,7 @@ int nl80211_disconnect_sta(wifi_interface_info_t *interface);
 int wifi_hal_purgeScanResult(unsigned int vap_index, unsigned char *sta_mac);
 void get_wifi_interface_info_map(wifi_interface_name_idex_map_t *interface_map);
 void get_radio_interface_info_map(radio_interface_mapping_t *radio_interface_map);
+unsigned int get_sizeof_interfaces_index_map(void);
 int validate_radio_operation_param(wifi_radio_operationParam_t *param);
 int validate_wifi_interface_vap_info_params(wifi_vap_info_t *vap_info, char *msg, int len);
 int is_backhaul_interface(wifi_interface_info_t *interface);
@@ -958,7 +979,13 @@ int get_security_encryption_mode_str_from_int(wifi_encryption_method_t encryptio
 int get_security_mode_support_radius(int mode);
 void wps_enum_to_string(unsigned int methods, char *str, int len);
 int get_radio_variant_str_from_int(unsigned int variant, char *variant_str);
+#ifndef FEATURE_SINGLE_PHY
+wifi_radio_info_t *get_radio_by_phy_index(wifi_radio_index_t index);
 int get_rdk_radio_index(unsigned int phy_index);
+#else //FEATURE_SINGLE_PHY
+int get_rdk_radio_indices(unsigned int phy_index, int *rdk_radio_indices, int *num_radios_mapped);
+int get_rdk_radio_index_from_interface_name(char *interface_name);
+#endif //FEATURE_SINGLE_PHY
 int get_interface_name_from_radio_index(uint8_t radio_index, char *interface_name);
 int get_sec_channel_offset(wifi_radio_info_t *radio, int freq);
 int get_bw80_center_freq(wifi_radio_operationParam_t *param, const char *country);
@@ -1182,6 +1209,7 @@ extern u8_bitmap g_DialogToken[MAX_AP_INDEX];
 int wifi_freq_to_channel(int freq, uint *channel);
 int wifi_channel_to_freq(const char* country, UCHAR opclass, uint channel, uint *freq);
 enum nl80211_band wifi_freq_band_to_nl80211_band(wifi_freq_bands_t band);
+enum nl80211_band get_nl80211_band_from_rdk_radio_index(unsigned int rdk_radio_index);
 const char* get_chan_dfs_state(struct hostapd_channel_data *chan);
 
 static inline size_t wifi_strnlen(const char *src, size_t maxlen) {
@@ -1191,7 +1219,8 @@ int wifi_strcpy(char *dest, size_t dest_size, const char *src);
 int wifi_strcat(char *dest, size_t dest_size, const char *src);
 int wifi_strncpy(char *dest, size_t dest_size, const char *src, size_t count);
 int str_list_append(char *dest, size_t dest_size, const char *src);
-int wifi_ieee80211Variant_to_str(char *dest, size_t dest_size, wifi_ieee80211Variant_t variant);
+int wifi_ieee80211Variant_to_str(char *dest, size_t dest_size, wifi_ieee80211Variant_t variant,
+    const char *str);
 int wifi_channelBandwidth_to_str(char *dest, size_t dest_size, wifi_channelBandwidth_t bandwidth);
 int wifi_bitrate_to_str(char *dest, size_t dest_size, wifi_bitrate_t bitrate);
 void init_interface_map(void);

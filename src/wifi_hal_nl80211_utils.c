@@ -385,6 +385,37 @@ const wifi_driver_info_t  driver_info = {
     platform_get_radio_caps,
 #endif
 
+#ifdef BANANA_PI_PORT // for reference device platforms
+    "bpi4",
+    "cfg80211",
+    {"Banana Filogic Wireless Gateway","Banana","PI","PI","Model Description","Model URL","267","WPS Access Point","Manufacturer URL"},
+    platform_pre_init,
+    platform_post_init,
+    platform_set_radio,
+    platform_set_radio_pre_init,
+    platform_pre_create_vap,
+    platform_create_vap,
+    platform_get_ssid_default,
+    platform_get_keypassphrase_default,
+    platform_get_radius_key_default,
+    platform_get_wps_pin_default,
+    platform_get_country_code_default,
+    platform_wps_event,
+    platform_flags_init,
+    platform_get_aid,
+    platform_free_aid,
+    platform_sync_done,
+    platform_update_radio_presence,
+    platform_set_txpower,
+    platform_set_offload_mode,
+    platform_get_acl_num,
+    platform_get_vendor_oui,
+    platform_set_neighbor_report,
+    platform_get_radio_phytemperature,
+    platform_set_dfs,
+    platform_get_radio_caps,
+#endif
+
 #ifdef TCXB7_PORT // for Broadcom based platforms
     "tcxb7",
     "dhd",
@@ -1010,7 +1041,7 @@ wifi_country_radio_op_class_t other_op_class = {
     }
 };
 
-static unsigned int get_sizeof_interfaces_index_map(void) {
+unsigned int get_sizeof_interfaces_index_map(void) {
 #ifdef CONFIG_WIFI_EMULATOR
     unsigned int count = 0;
     const wifi_interface_name_idex_map_t *tmp_interface_index_map = interface_index_map;
@@ -1049,7 +1080,7 @@ static unsigned int get_sizeof_radio_interfaces_map(void)
 
 BOOL is_wifi_hal_vap_private(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "private_ssid", strlen("private_ssid")) == 0)) {
@@ -1061,7 +1092,7 @@ BOOL is_wifi_hal_vap_private(UINT ap_index)
 
 BOOL is_wifi_hal_vap_xhs(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "iot_ssid", strlen("iot_ssid")) == 0)) {
@@ -1073,7 +1104,7 @@ BOOL is_wifi_hal_vap_xhs(UINT ap_index)
 
 BOOL is_wifi_hal_vap_hotspot(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "hotspot", strlen("hotspot")) == 0)) {
@@ -1085,7 +1116,7 @@ BOOL is_wifi_hal_vap_hotspot(UINT ap_index)
 
 BOOL is_wifi_hal_vap_hotspot_from_interfacename(char *interface_name)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((strcmp(interface_index_map[index].interface_name, interface_name) == 0) &&
                 (strncmp(interface_index_map[index].vap_name, "hotspot", strlen("hotspot")) == 0)) {
@@ -1097,7 +1128,7 @@ BOOL is_wifi_hal_vap_hotspot_from_interfacename(char *interface_name)
 
 BOOL is_wifi_hal_6g_radio_from_interfacename(char *interface_name)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     wifi_radio_info_t *radio;
 
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
@@ -1120,7 +1151,7 @@ BOOL is_wifi_hal_6g_radio_from_interfacename(char *interface_name)
 
 BOOL is_wifi_hal_vap_hotspot_open(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "hotspot_open", strlen("hotspot_open")) == 0)) {
@@ -1132,7 +1163,7 @@ BOOL is_wifi_hal_vap_hotspot_open(UINT ap_index)
 
 BOOL is_wifi_hal_vap_lnf(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "lnf", strlen("lnf")) == 0)) {
@@ -1144,7 +1175,7 @@ BOOL is_wifi_hal_vap_lnf(UINT ap_index)
 
 BOOL is_wifi_hal_vap_lnf_psk(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "lnf_psk", strlen("lnf_psk")) == 0)) {
@@ -1156,7 +1187,7 @@ BOOL is_wifi_hal_vap_lnf_psk(UINT ap_index)
 
 BOOL is_wifi_hal_vap_mesh(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "mesh", strlen("mesh")) == 0)) {
@@ -1168,7 +1199,7 @@ BOOL is_wifi_hal_vap_mesh(UINT ap_index)
 
 BOOL is_wifi_hal_vap_mesh_backhaul(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "mesh_backhaul", strlen("mesh_backhaul")) == 0)) {
@@ -1180,7 +1211,7 @@ BOOL is_wifi_hal_vap_mesh_backhaul(UINT ap_index)
 
 BOOL is_wifi_hal_vap_hotspot_secure(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "hotspot_secure", strlen("hotspot_secure")) == 0)) {
@@ -1192,7 +1223,7 @@ BOOL is_wifi_hal_vap_hotspot_secure(UINT ap_index)
 
 BOOL is_wifi_hal_vap_lnf_radius(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "lnf_radius", strlen("lnf_radius")) == 0)) {
@@ -1204,7 +1235,7 @@ BOOL is_wifi_hal_vap_lnf_radius(UINT ap_index)
 
 BOOL is_wifi_hal_vap_mesh_sta(UINT ap_index)
 {
-    unsigned char index = 0;
+    unsigned int index = 0;
     for (index = 0; index < get_sizeof_interfaces_index_map(); index++) {
         if ((interface_index_map[index].index == ap_index) &&
                 (strncmp(interface_index_map[index].vap_name, "mesh_sta", strlen("mesh_sta")) == 0)) {
@@ -1271,6 +1302,9 @@ int get_interface_name_from_radio_index(uint8_t radio_index, char *interface_nam
     return RETURN_ERR;
 }
 
+#ifndef FEATURE_SINGLE_PHY
+/* Below two functions assumes that phy_index is unique for a radio index.
+   These functions cannot be used in single phy architecture. */
 int get_rdk_radio_index(unsigned int phy_index)
 {
     const wifi_interface_name_idex_map_t *map;
@@ -1283,6 +1317,77 @@ int get_rdk_radio_index(unsigned int phy_index)
     }
     return -1;
 }
+
+wifi_radio_info_t *get_radio_by_phy_index(wifi_radio_index_t index)
+{
+    wifi_radio_info_t *radio;
+    unsigned int i;
+
+    for (i = 0; i < g_wifi_hal.num_radios; i++) {
+        radio = &g_wifi_hal.radio_info[i];
+        if (radio->index == index) {
+            return radio;
+        }
+    }
+
+    return NULL;
+}
+#else //FEATURE_SINGLE_PHY
+/* Below two functions are used in case of Banana Pi platform
+   These functions support single phy supporting multiple radios.*/
+int get_rdk_radio_index_from_interface_name(char *interface_name)
+{
+    uint8_t i = 0;
+    const wifi_interface_name_idex_map_t *map = NULL;
+    for (i = 0; i < get_sizeof_interfaces_index_map(); i++) {
+        map = &interface_index_map[i];
+        if ((strcmp(interface_name, map->interface_name) == 0)) {
+            wifi_hal_dbg_print("%s:%d rdk_radio_index:%d for interface:%s\n", __func__, __LINE__,
+                map->rdk_radio_index, interface_name);
+            return map->rdk_radio_index;
+        }
+    }
+    wifi_hal_dbg_print("%s:%d rdk_radio_index:%d for interface:%s\n", __func__, __LINE__, -1,
+        interface_name);
+    return -1;
+}
+
+int get_rdk_radio_indices(unsigned int phy_index, int *rdk_radio_indices, int *num_radios_mapped)
+{
+    uint8_t i = 0;
+    int num_radios = 0;
+    int max_radios;
+
+    if (rdk_radio_indices == NULL || num_radios_mapped == NULL) {
+        return RETURN_ERR;
+    }
+    max_radios = *num_radios_mapped;
+
+    for (i = 0; i < get_sizeof_radio_interfaces_map(); i++) {
+        if (l_radio_interface_map[i].phy_index == phy_index) {
+            if (num_radios < max_radios) {
+                rdk_radio_indices[num_radios] = l_radio_interface_map[i].radio_index;
+                num_radios++;
+            } else {
+                wifi_hal_error_print("%s:%d: Not adding rdk radio%u, "
+                                     "since exceeding max_radios:%d\n",
+                    __func__, __LINE__, i, max_radios);
+            }
+        }
+    }
+    *num_radios_mapped = num_radios;
+    if (num_radios == 0) {
+        return RETURN_ERR;
+    }
+    wifi_hal_dbg_print("%s:%d: Filled rdk_radio_indices, size:%d\n", __func__, __LINE__,
+        *num_radios_mapped);
+    for (i = 0; i < *num_radios_mapped; i++) {
+        wifi_hal_dbg_print("%u ", rdk_radio_indices[i]);
+    }
+    wifi_hal_dbg_print("\n");
+    return RETURN_OK;
+}
+#endif //FEATURE_SINGLE_PHY
 
 int is_backhaul_interface(wifi_interface_info_t *interface)
 {
@@ -1458,7 +1563,11 @@ int get_interface_name_from_vap_index(unsigned int vap_index, char *interface_na
     wifi_radio_info_t *radio;
 
     for (l_index = 0; l_index < g_wifi_hal.num_radios; l_index++) {
+#ifndef FEATURE_SINGLE_PHY
         radio = get_radio_by_rdk_index(l_index);
+#else //FEATURE_SINGLE_PHY
+        radio = &g_wifi_hal.radio_info[l_index];
+#endif //FEATURE_SINGLE_PHY
         total_num_of_vaps += radio->capab.maxNumberVAPs;
     }
 
@@ -1495,21 +1604,6 @@ wifi_radio_info_t *get_radio_by_rdk_index(wifi_radio_index_t index)
     return NULL;
 }
 
-
-wifi_radio_info_t *get_radio_by_phy_index(wifi_radio_index_t index)
-{
-    wifi_radio_info_t *radio;
-    unsigned int i;
-
-    for (i = 0; i < g_wifi_hal.num_radios; i++) {
-        radio = &g_wifi_hal.radio_info[i];
-        if (radio->index == index) {
-            return radio;
-        }
-    }
-
-    return NULL;
-}
 
 wifi_interface_info_t *get_interface_by_vap_index(unsigned int vap_index)
 {
@@ -3235,6 +3329,24 @@ enum nl80211_band wifi_freq_band_to_nl80211_band(wifi_freq_bands_t band)
     }
 }
 
+enum nl80211_band get_nl80211_band_from_rdk_radio_index(unsigned int rdk_radio_index)
+{
+    switch(rdk_radio_index) {
+        case 0:
+            return NL80211_BAND_2GHZ;
+        case 1:
+            return NL80211_BAND_5GHZ;
+        case 2:
+    #if HOSTAPD_VERSION >= 210
+            return NL80211_BAND_6GHZ;
+    #endif
+        default:
+            //not supported case
+            return NUM_NL80211_BANDS;
+
+    }
+}
+
 const char* get_chan_dfs_state(struct hostapd_channel_data *chan)
 {
     switch (chan->flag & HOSTAPD_CHAN_DFS_MASK) {
@@ -3258,7 +3370,11 @@ int get_total_num_of_vaps(void)
     wifi_radio_info_t *radio;
 
     for (l_index = 0; l_index < g_wifi_hal.num_radios; l_index++) {
+#ifndef FEATURE_SINGLE_PHY
         radio = get_radio_by_rdk_index(l_index);
+#else //FEATURE_SINGLE_PHY
+        radio = &g_wifi_hal.radio_info[l_index];
+#endif //FEATURE_SINGLE_PHY
         total_num_of_vaps += radio->capab.maxNumberVAPs;
     }
 
@@ -3404,11 +3520,51 @@ fail:
     return RETURN_ERR;
 }
 
-int wifi_ieee80211Variant_to_str(char *dest, size_t dest_size, wifi_ieee80211Variant_t variant)
+int wifi_ieee80211Variant_to_str(char *dest, size_t dest_size, wifi_ieee80211Variant_t variant,
+    const char *str)
 {
-    return wifi_enum_bitmap_to_str(dest, dest_size,
-        wifi_variant_Map, ARRAY_SIZE(wifi_variant_Map),
-        "802.11", (int)variant);
+    const char *mode;
+
+    if (*str != '\0') {
+        return wifi_enum_bitmap_to_str(dest, dest_size, wifi_variant_Map,
+            ARRAY_SIZE(wifi_variant_Map), str, (int)variant);
+    } else {
+        if ((dest != NULL) && (dest_size != 0)) {
+            *dest = '\0';
+
+            if (variant & WIFI_80211_VARIANT_A) {
+                mode = "a";
+                str_list_append(dest, dest_size, mode);
+            }
+            if (variant & WIFI_80211_VARIANT_B) {
+                mode = "b";
+                str_list_append(dest, dest_size, mode);
+            }
+            if (variant & WIFI_80211_VARIANT_G) {
+                mode = "g";
+                str_list_append(dest, dest_size, mode);
+            }
+            if (variant &
+                (WIFI_80211_VARIANT_N | WIFI_80211_VARIANT_AC | WIFI_80211_VARIANT_AX |
+                    WIFI_80211_VARIANT_BE)) {
+                if (variant & WIFI_80211_VARIANT_BE) {
+                    mode = "be";
+                } else if (variant & WIFI_80211_VARIANT_AX) {
+                    mode = "ax";
+                } else if (variant & WIFI_80211_VARIANT_AC) {
+                    mode = "ac";
+                } else {
+                    mode = "n";
+                }
+                str_list_append(dest, dest_size, mode);
+            }
+        } else {
+            wifi_hal_error_print("%s:%d: NULL or zero-size buffer\n", __func__, __LINE__);
+            return RETURN_ERR;
+        }
+    }
+
+    return RETURN_OK;
 }
 
 int wifi_channelBandwidth_to_str(char *dest, size_t dest_size, wifi_channelBandwidth_t bandwidth)
@@ -3531,14 +3687,14 @@ void re_configure_steering_mac_list(wifi_interface_info_t *interface)
 #ifdef CONFIG_WIFI_EMULATOR
 void init_interface_map(void)
 {
-    interface_index_map = (wifi_interface_name_idex_map_t *)malloc(sizeof(wifi_interface_name_idex_map_t)*MAX_CLIENTS);
+    interface_index_map = (wifi_interface_name_idex_map_t *)malloc(sizeof(wifi_interface_name_idex_map_t)*MAX_NUM_SIMULATED_CLIENT);
     if (interface_index_map != NULL) {
-        memset(interface_index_map, 0, sizeof(wifi_interface_name_idex_map_t)*MAX_CLIENTS);
+        memset(interface_index_map, 0, sizeof(wifi_interface_name_idex_map_t)*MAX_NUM_SIMULATED_CLIENT);
     }
 
-    l_radio_interface_map = (radio_interface_mapping_t *)malloc(sizeof(radio_interface_mapping_t)*MAX_CLIENTS);
+    l_radio_interface_map = (radio_interface_mapping_t *)malloc(sizeof(radio_interface_mapping_t)*MAX_NUM_SIMULATED_CLIENT);
     if (l_radio_interface_map != NULL) {
-        memset(l_radio_interface_map, 0, sizeof(radio_interface_mapping_t)*MAX_CLIENTS);
+        memset(l_radio_interface_map, 0, sizeof(radio_interface_mapping_t)*MAX_NUM_SIMULATED_CLIENT);
     }
 
     return;
