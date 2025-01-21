@@ -1831,8 +1831,11 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
             forward_frame = (WIFI_HAL_UNSUPPORTED == handle_rrm_action_frame(interface, sta, mgmt, len, sig_dbm));
             break;
         case wifi_action_frame_type_public:
-            // - don't handle frame by calling wpa_supplicant_event() if action frame was already handled:
-            forward_frame = (WIFI_HAL_UNSUPPORTED == handle_public_action_frame(vap->vap_index, sta, (wifi_publicActionFrameHdr_t *)mgmt, len));
+            // - don't handle frame by calling wpa_supplicant_event() if action frame was already
+            // handled: The below code is commented as it is causing duplicates. handling of public
+            // action frames is taken care further below of this function via
+            // callbacks->mgmt_frame_rx_callback
+            forward_frame = false;
             break;
         default:
             break;
