@@ -2899,6 +2899,12 @@ INT wifi_getRadioTrafficStats2(INT radioIndex, wifi_radioTrafficStats2_t *radioT
 
     return RETURN_OK;
 }
+
+INT wifi_getRadioTransmitPower(INT radioIndex, ULONG *tx_power)
+{
+    return wifi_hal_getRadioTransmitPower(radioIndex, tx_power);
+}
+
 #endif // TCXB7_PORT || TCXB8_PORT || XB10_PORT || SCXER10_PORT
 
 int platform_set_dfs(wifi_radio_index_t index, wifi_radio_operationParam_t *operationParam)
