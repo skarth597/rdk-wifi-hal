@@ -13106,7 +13106,9 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
         }
     }
 
-#ifdef NL80211_ACL
+#if defined(NL80211_ACL) && !defined(PLATFORM_LINUX)
+    //TODO: Remove/Refine the check of !defined(PLATFORM_LINUX) based on
+    //support for ACL in latest versions of Raspberry PI driver.
     nl80211_put_acl(msg, interface);
 #endif
 
