@@ -15067,6 +15067,32 @@ static int wifi_drv_mbssid_get_interface_index(wifi_radio_info_t *radio,
     return (unsigned char)(interface->mac[5] - tx_interface->mac[5]) % max_bss_num;
 }
 
+static size_t wifi_drv_mbssid_rm_enabled_capab(struct hostapd_data *bss,
+    struct hostapd_data *tx_bss, u8 *buf)
+{
+    u8 ie_buf[20], tx_ie_buf[20];
+    size_t ie_len, tx_ie_len;
+    u8 *ie_end, *tx_ie_end;
+
+    ie_end = hostapd_eid_rm_enabled_capab(bss, ie_buf, sizeof(ie_buf));
+    ie_len = ie_end - ie_buf;
+    if (ie_len == 0) {
+        return 0;
+    }
+
+    tx_ie_end = hostapd_eid_rm_enabled_capab(tx_bss, tx_ie_buf, sizeof(tx_ie_buf));
+    tx_ie_len = tx_ie_end - tx_ie_buf;
+    if (tx_ie_len == ie_len && memcmp(ie_buf, tx_ie_buf, ie_len) == 0) {
+        return 0;
+    }
+
+    if (buf != NULL) {
+        memcpy(buf, ie_buf, ie_len);
+    }
+
+    return ie_len;
+}
+
 static size_t wifi_drv_mbssid_ext_capa(struct hostapd_data *bss, struct hostapd_data *tx_bss,
     u8 *buf)
 {
@@ -15315,6 +15341,7 @@ static size_t wifi_drv_eid_mbssid_elem_len(wifi_radio_info_t *radio,
         nontx_profile_len += wifi_drv_mbssid_rsn(bss, tx_bss, WLAN_EID_RSN, NULL);
         nontx_profile_len += wifi_drv_mbssid_rsn(bss, tx_bss, WLAN_EID_RSNX, NULL);
 
+        nontx_profile_len += wifi_drv_mbssid_rm_enabled_capab(bss, tx_bss, NULL);
         nontx_profile_len += wifi_drv_mbssid_ext_capa(bss, tx_bss, NULL);
 
         nontx_profile_len += wifi_drv_mbssid_interworking(bss, tx_bss, NULL);
@@ -15406,6 +15433,7 @@ static u8 *wifi_drv_eid_mbssid_elem(wifi_radio_info_t *radio, wifi_interface_inf
         eid += wifi_drv_mbssid_rsn(bss, tx_bss, WLAN_EID_RSN, eid);
         eid += wifi_drv_mbssid_rsn(bss, tx_bss, WLAN_EID_RSNX, eid);
 
+        eid += wifi_drv_mbssid_rm_enabled_capab(bss, tx_bss, eid);
         eid += wifi_drv_mbssid_ext_capa(bss, tx_bss, eid);
 
         eid += wifi_drv_mbssid_interworking(bss, tx_bss, eid);
