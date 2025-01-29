@@ -1774,6 +1774,16 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
 #ifdef WIFI_EMULATOR_CHANGE
         send_mgmt_to_char_dev = true;
 #endif
+#if defined(TCXB7_PORT) || defined(TCXB8_PORT) || defined(XB10_PORT) || defined(SCXER10_PORT) || \
+    defined(SKYSR213_PORT) || defined(SKYSR300_PORT) || defined(TCHCBRV2_PORT)
+        /* Authentication done in driver except SAE */
+        if (len >= IEEE80211_HDRLEN + sizeof(mgmt->u.auth) &&
+            le_to_host16(mgmt->u.auth.auth_alg) != WLAN_AUTH_SAE) {
+            forward_frame = false;
+        }
+#endif /* defined(TCXB7_PORT) || defined(TCXB8_PORT) || defined(XB10_PORT) ||
+          defined(SCXER10_PORT) || defined(SKYSR213_PORT) || defined(SKYSR300_PORT) ||
+          defined(TCHCBRV2_PORT) */
         break;
 
     case WLAN_FC_STYPE_ASSOC_REQ:
