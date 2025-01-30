@@ -453,7 +453,8 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             conf->wpa_key_mgmt = WPA_KEY_MGMT_SAE;
 #ifdef CONFIG_IEEE80211BE
             conf->wpa_key_mgmt |= (conf->disable_11be ? 0 : WPA_KEY_MGMT_SAE_EXT_KEY);
-#endif
+#endif /* CONFIG_IEEE80211BE */
+
             conf->auth_algs = WPA_AUTH_ALG_SAE;
 #if HOSTAPD_VERSION >= 210 //2.10
             if (is_wifi_hal_6g_radio_from_interfacename(conf->iface) == true) {
@@ -478,8 +479,8 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
         case wifi_security_mode_wpa3_transition:
             conf->wpa_key_mgmt = WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE;
 #ifdef CONFIG_IEEE80211BE
-//            conf->wpa_key_mgmt |= (conf->disable_11be ? 0 : WPA_KEY_MGMT_SAE_EXT_KEY);
-#endif
+            conf->wpa_key_mgmt |= (conf->disable_11be ? 0 : WPA_KEY_MGMT_SAE_EXT_KEY);
+#endif /* CONFIG_IEEE80211BE */
             conf->auth_algs = WPA_AUTH_ALG_SAE | WPA_AUTH_ALG_SHARED | WPA_AUTH_ALG_OPEN;
 #if HOSTAPD_VERSION >= 210 //2.10
 #ifdef CONFIG_IEEE80211BE
@@ -495,13 +496,13 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
     }
 
 #ifdef CONFIG_SAE
-    if (conf->wpa_key_mgmt & WPA_KEY_MGMT_SAE) {
-        if (conf->sae_groups == NULL) {
-            conf->sae_groups = (int *) os_malloc(sizeof(int) * 3);
+    if (conf->auth_algs & WPA_AUTH_ALG_SAE) {
+        if (conf->sae_groups == NULL &&
+            (conf->sae_groups = os_malloc(sizeof(*conf->sae_groups) * 4)) != NULL) {
             conf->sae_groups[0] = 19;
             conf->sae_groups[1] = 20;
             conf->sae_groups[2] = 21;
-            //conf->sae_groups[3] = 0;
+            conf->sae_groups[3] = -1;
         }
     }
 #endif
@@ -588,19 +589,13 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
             conf->wpa_pairwise = WPA_CIPHER_CCMP;
 #ifdef CONFIG_IEEE80211BE
             switch (sec->mode) {
-                case wifi_security_mode_none:
-                case wifi_security_mode_wpa_wpa2_personal:
-                case wifi_security_mode_wpa2_personal:
-                case wifi_security_mode_wpa3_transition:
-                case wifi_security_mode_wpa_enterprise:
-                case wifi_security_mode_wpa2_enterprise:
-                case wifi_security_mode_wpa_wpa2_enterprise:
-                case wifi_security_mode_wpa3_enterprise:
-                case wifi_security_mode_enhanced_open:
-                    break;
-                default:
-                    conf->wpa_pairwise |= (conf->disable_11be ? 0 : WPA_CIPHER_GCMP_256);
-                    break;
+            case wifi_security_mode_wpa3_personal:
+            case wifi_security_mode_wpa3_transition:
+            case wifi_security_mode_wpa3_enterprise:
+                conf->wpa_pairwise |= (conf->disable_11be ? 0 : WPA_CIPHER_GCMP_256);
+                break;
+            default:
+                break;
             }
 #endif /* CONFIG_IEEE80211BE */
             break;
