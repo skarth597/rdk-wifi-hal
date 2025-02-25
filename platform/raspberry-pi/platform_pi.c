@@ -625,6 +625,7 @@ INT wifi_steering_eventRegister(wifi_steering_eventCB_t event_cb)
     return RETURN_OK;
 }
 
+#ifndef EM_APP
 int wifi_rrm_send_beacon_req(struct wifi_interface_info_t *interface, const u8 *addr,
     u16 num_of_repetitions, u8 measurement_request_mode, u8 oper_class, u8 channel,
     u16 random_interval, u16 measurement_duration, u8 mode, const u8 *bssid,
@@ -634,6 +635,7 @@ int wifi_rrm_send_beacon_req(struct wifi_interface_info_t *interface, const u8 *
 {
     return 0;
 }
+#endif
 
 /* called by BTM API */
 int wifi_wnm_send_bss_tm_req(struct wifi_interface_info_t *interface, struct sta_info *sta,
