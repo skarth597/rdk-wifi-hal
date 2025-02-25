@@ -583,6 +583,7 @@ int handle_wnm_action_frame(wifi_interface_info_t *interface, const mac_address_
     }
     return WIFI_HAL_UNSUPPORTED;
 }
+#endif
 
 /* based on hostapd_send_beacon_req() */
 int wifi_rrm_send_beacon_req(wifi_interface_info_t *interface, const u8 *addr,
@@ -744,7 +745,6 @@ int wifi_rrm_send_beacon_req(wifi_interface_info_t *interface, const u8 *addr,
 
     return hapd->beacon_req_token;
 }
-#endif
 
 static void wifi_set_disassoc_timer(struct hostapd_data *hapd, struct sta_info *sta,
                 int disassoc_timer)
