@@ -2202,7 +2202,7 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
     char country[8] = {0}, tmp_str[32] = {0}, chan_list_str[512] = {0};
     unsigned int freq_list[32], i;
     ssid_t  ssid_list[8];
-    int op_class;
+    int op_class, freq_num = 0;
 
     wifi_hal_stats_dbg_print("%s:%d: index: %d mode: %d dwell time: %d\n", __func__, __LINE__, index,
         scan_mode, dwell_time);
@@ -2262,21 +2262,28 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
 
         if ((op_class = get_op_class_from_radio_params(&param)) == -1) {
             wifi_hal_stats_error_print("%s:%d: Invalid channel %d\n", __func__, __LINE__, param.channel);
-            return RETURN_ERR;
+            continue;
         }
 
-        freq_list[i] = ieee80211_chan_to_freq(country, op_class, param.channel);
-        if (freq_list[i] == 0) {
-            return RETURN_ERR;
+        freq_list[freq_num] = ieee80211_chan_to_freq(country, op_class, param.channel);
+        if (freq_list[freq_num] == 0) {
+            continue;
         }
-        sprintf(tmp_str, "%d ", freq_list[i]);
+        sprintf(tmp_str, "%d ", freq_list[freq_num]);
         strcat(chan_list_str, tmp_str);
+
+	freq_num++;
+    }
+
+    if (freq_num == 0) {
+        wifi_hal_stats_error_print("%s:%d: No valid channels\n", __func__, __LINE__);
+        return RETURN_ERR;
     }
 
     strcpy(ssid_list[0], vap->u.sta_info.ssid);
     wifi_hal_stats_info_print("%s:%d: Scan Frequencies:%s \n", __func__, __LINE__, chan_list_str);
 
-    return (nl80211_start_scan(interface, 0, num, freq_list, dwell_time, 1, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
+    return (nl80211_start_scan(interface, 0, freq_num, freq_list, dwell_time, 1, ssid_list) == 0) ? RETURN_OK:RETURN_ERR;
 }
 
 /*****************************/
