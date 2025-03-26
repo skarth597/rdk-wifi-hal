@@ -2242,7 +2242,7 @@ INT wifi_hal_startScan(wifi_radio_index_t index, wifi_neighborScanMode_t scan_mo
     radio_param = &radio->oper_param;
 
     if (scan_mode == WIFI_RADIO_SCAN_MODE_ONCHAN) {
-        freq_num = 1;
+        num = 1;
     } else if (scan_mode == WIFI_RADIO_SCAN_MODE_OFFCHAN) {
         if ((num == 0) || (chan_list == NULL)) {
             wifi_hal_stats_error_print("%s:%d: Channels not speified for offchannel scan mode\n", __func__, __LINE__);
