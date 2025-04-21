@@ -49,7 +49,9 @@
 #include "ap/wmm.h"
 #include <sys/wait.h>
 #include <linux/if_ether.h>
+#ifdef __GLIBC__
 #include <netinet/ether.h>
+#endif
 #include <linux/filter.h>
 #include <fcntl.h>
 
@@ -161,7 +163,7 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
                                     interface->u.ap.br_sock_fd:interface->u.sta.sta_sock_fd;
                 FD_SET(sock_fd, &priv->drv_rfds);
 #endif
-                if (interface->vap_info.vap_mode == wifi_vap_mode_ap) {
+                if (interface->vap_info.vap_mode != wifi_vap_mode_monitor) {
 #ifdef EAPOL_OVER_NL
                     if (interface->bss_frames_registered == 1) {
                         FD_SET(interface->bss_nl_connect_event_fd, &priv->drv_rfds);
@@ -298,7 +300,7 @@ bool mgmt_fd_isset(wifi_hal_priv_t *priv, wifi_interface_info_t **intf)
         interface = hash_map_get_first(radio->interface_map);
         while (interface != NULL) {
             if (interface->vap_configured == true &&
-                interface->vap_info.vap_mode == wifi_vap_mode_ap &&
+                interface->vap_info.vap_mode != wifi_vap_mode_monitor &&
                 interface->mgmt_frames_registered == 1 &&
                     FD_ISSET(interface->nl_event_fd, &priv->drv_rfds)) {
                 found = true;
@@ -2794,6 +2796,15 @@ void *nl_recv_func(void *arg)
     wifi_hal_priv_t *priv = (wifi_hal_priv_t *)arg;
     wifi_interface_info_t *interface;
     int eloop_timeout_ms;
+#if defined (_PLATFORM_BANANAPI_R4_)
+    size_t stack_size2;
+    pthread_attr_t attr;
+
+    pthread_attr_init(&attr);
+    pthread_attr_getstacksize(&attr, &stack_size2);
+    wifi_hal_dbg_print("%s:%d Thread stack size = %ld bytes \n", __func__, __LINE__, stack_size2);
+    pthread_attr_destroy(&attr);
+#endif
 
     prctl(PR_SET_NAME,  __func__, 0, 0, 0);
 
@@ -7162,9 +7173,28 @@ static int nl80211_register_mgmt_frames(wifi_interface_info_t *interface)
     struct nl_msg *msg;
     unsigned int i;
     int ret;
-    //wifi_vap_info_t *vap;
-    //wifi_radio_info_t *radio;
-    static const int stypes[] = {
+
+    /**
+     * While stations are able to register for Action, Probe Request, and Authentication frames,
+     * authentication frames need additional information to be registered succeesfully.
+     * Specifically, authentication frames need to be registered with the NL80211_ATTR_FRAME_MATCH
+     * attribute set to the authentication algorithm field to be matched against when recieving. 
+     * 
+     * This is outlined in the Linux kernel in `net/mac80211/main.c:ieee80211_default_mgmt_stypes`
+     * where it details the supported types and why an authentication algorithm must be given.
+     * 
+     * An implementation here _could_ have chosen to register for authentication frames with many 
+     * different authentication algorithms or even added a parameter, however that does not appear 
+     * needed in the current implementation.
+     */
+    
+    const int stypes_sta[] = {
+        /*WLAN_FC_STYPE_AUTH,*/ // Uneeded and requires extra info
+        /*WLAN_FC_STYPE_PROBE_REQ,*/ // Unneeded 
+        WLAN_FC_STYPE_ACTION,
+    };
+
+    const int stypes_ap[] = {
         WLAN_FC_STYPE_AUTH,
         WLAN_FC_STYPE_ASSOC_REQ,
         WLAN_FC_STYPE_REASSOC_REQ,
@@ -7174,6 +7204,18 @@ static int nl80211_register_mgmt_frames(wifi_interface_info_t *interface)
         WLAN_FC_STYPE_ACTION,
         /*WLAN_FC_STYPE_BEACON,*/
     };
+    
+    // Select the appropriate array based on interface mode
+    int *stypes;
+    unsigned int num_stypes;
+    if (interface->vap_info.vap_mode == wifi_vap_mode_sta) {
+        stypes = stypes_sta;
+        num_stypes = sizeof(stypes_sta) / sizeof(int);
+    } else {
+        stypes = stypes_ap;
+        num_stypes = sizeof(stypes_ap) / sizeof(int);
+    }
+
     unsigned short frame_type;
 
     if (interface->mgmt_frames_registered == 1) {
@@ -7202,7 +7244,7 @@ static int nl80211_register_mgmt_frames(wifi_interface_info_t *interface)
     wifi_hal_info_print("%s:%d: interface:%s ifindex:%d nl sock:%d\n", __func__, __LINE__,
         interface->name, interface->index, interface->nl_event_fd);
 
-    for (i = 0; i < sizeof(stypes)/sizeof(int); i++) {
+    for (i = 0; i < num_stypes; i++) {
         msg = nl80211_drv_cmd_msg(g_wifi_hal.nl80211_id, NULL, 0, NL80211_CMD_REGISTER_FRAME);
         if (msg == NULL) {
             return -1;
@@ -13560,7 +13602,7 @@ int wifi_drv_set_ap(void *priv, struct wpa_driver_ap_params *params)
         }
     }
 
-#if defined(NL80211_ACL) && !defined(PLATFORM_LINUX) && !defined(_PLATFORM_RASPBERRYPI_)
+#if defined(NL80211_ACL) && !defined(PLATFORM_LINUX)
     //Raspberry Pi kernel requires patching to support ACL functionality.
     nl80211_put_acl(msg, interface);
 #endif
@@ -13922,11 +13964,14 @@ int wifi_drv_set_operstate(void *priv, int state)
         return 0;
     }
 
-    if (vap->vap_mode == wifi_vap_mode_ap) {
+    if (vap->vap_mode != wifi_vap_mode_monitor) {
+        // Both STAs and APs can register for management frames but not spurious frames
         if (nl80211_register_mgmt_frames(interface) != 0) {
             wifi_hal_error_print("%s:%d: Failed to register for management frames\n", __func__, __LINE__);
             return -1;
         }
+    }
+    if (vap->vap_mode == wifi_vap_mode_ap) {
         if (nl80211_register_spurious_frames(interface) != 0) {
             wifi_hal_error_print("%s:%d: Failed to register spurious frames\n", __func__, __LINE__);
             return -1;
