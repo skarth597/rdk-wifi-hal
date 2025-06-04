@@ -2015,7 +2015,6 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
                     }
 		    mgmt_type = WIFI_MGMT_FRAME_TYPE_DISASSOC;
                     callbacks->disassoc_cb[i](vap->vap_index,to_mac_str(mgmt->sa,sta_mac_str),to_mac_str(mgmt->da,frame_da_str),mgmt_type,reasoncode);
-                    wifi_hal_dbg_print("%s:%d:disassoc callback is called\n", __func__, __LINE__);
                 }
             }
         } else {
@@ -11810,12 +11809,10 @@ int wifi_drv_hapd_send_eapol(
     }
 
     eth_hdr = (struct ieee8023_hdr *)buff;
-    wifi_hal_info_print("%s:%d started memcopying \n", __func__, __LINE__);
     memcpy(eth_hdr->src, own_addr, sizeof(mac_address_t));
     memcpy(eth_hdr->dest, addr, sizeof(mac_address_t));
     eth_hdr->ethertype = host_to_be16(ETH_P_EAPOL);
     memcpy(buff + sizeof(struct ieee8023_hdr), data, data_len);
-    wifi_hal_info_print("%s:%d memcopy is done \n", __func__, __LINE__);
 #ifdef WIFI_EMULATOR_CHANGE
     if ((access(ONEWIFI_TESTSUITE_TMPFILE, R_OK)) == 0) {
         if (fd_c < 0) {
@@ -16804,7 +16801,6 @@ int wifi_drv_get_sta_auth_type(void *priv, const u8 *addr, int auth_key,int fram
     int band;
     int mode;
     int key_mgmt;
-    wifi_hal_info_print("%s:%d start \n", __func__, __LINE__);
     if(!addr || !priv) {
         wifi_hal_error_print("%s:%d station/ies info is null\n", __func__, __LINE__);
         return RETURN_ERR;
@@ -16822,19 +16818,15 @@ int wifi_drv_get_sta_auth_type(void *priv, const u8 *addr, int auth_key,int fram
         key_mgmt = -1;
     }
     interface = (wifi_interface_info_t *)priv;
-    wifi_hal_info_print("%s:%d mid \n", __func__, __LINE__);
     if(interface == NULL) {
         wifi_hal_error_print("%s:%d interface is null\n", __func__, __LINE__);
         return RETURN_ERR;
     }
 
     vap = &interface->vap_info;
-    wifi_hal_info_print("%s:%d started memcopying \n", __func__, __LINE__);
     memcpy(sta, addr, sizeof(mac_address_t));
-    wifi_hal_info_print("%s:%d memcopy is done \n", __func__, __LINE__);
     band = vap->radio_index;
     callbacks = get_hal_device_callbacks();
-    wifi_hal_info_print("%s:%d get the callbacks \n", __func__, __LINE__);
     if (callbacks == NULL) {
         wifi_hal_info_print("%s:%d callbacks is null \n", __func__, __LINE__);
         return -1;
@@ -16860,11 +16852,9 @@ int wifi_drv_get_sta_auth_type(void *priv, const u8 *addr, int auth_key,int fram
 
      for (int i = 0; i < callbacks->num_stamode_cbs; i++) {
          if (callbacks->stamode_cb[i] != NULL) {
-             wifi_hal_info_print("%s:%d callbacks is not null \n", __func__, __LINE__);
              callbacks->stamode_cb[i](vap->vap_index, to_mac_str(sta, sta_mac_str), key_mgmt, frame_type, band, mode);
          }
      }
-    wifi_hal_info_print("%s:%d exit \n", __func__, __LINE__);
     return RETURN_OK;
 }
 
