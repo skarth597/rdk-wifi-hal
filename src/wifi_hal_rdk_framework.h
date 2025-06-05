@@ -126,7 +126,7 @@ typedef struct {
     wifi_newApAssociatedDevice_callback     assoc_cb[MAX_REGISTERED_CB_NUM];
     unsigned int                            num_assoc_cbs;
     wifi_apMaxClientRejection_callback      max_cli_rejection_cb;
-    wifi_ApDisassociatedDevice_callback     disassoc_cb[MAX_REGISTERED_CB_NUM];
+    wifi_device_disassociated_callback      disassoc_cb[MAX_REGISTERED_CB_NUM];
     unsigned int                            num_disassoc_cbs;
     wifi_apStatusCode_callback              statuscode_cb[MAX_REGISTERED_CB_NUM];
     unsigned int                            num_statuscode_cbs;
@@ -148,7 +148,7 @@ typedef struct {
     pthread_mutex_t                         lock;
     pthread_t                               notification_thread_id;
     bool                                    notification_framework_initialized;
-    wifi_ApDeAuthEvent_callback             apDeAuthEvent_cb[MAX_REGISTERED_CB_NUM];
+    wifi_device_deauthenticated_callback    apDeAuthEvent_cb[MAX_REGISTERED_CB_NUM];
     wifi_vapstatus_callback                 vapstatus_cb[MAX_REGISTERED_CB_NUM];
     unsigned int                            num_apDeAuthEvent_cbs;
     wifi_receivedMgmtFrame_callback         mgmt_frame_rx_callback;
