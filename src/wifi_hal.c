@@ -2910,7 +2910,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
 {
     wifi_radio_info_t *radio;
     wifi_interface_info_t *interface;
-    uint freq, op_class, on_chan;
+    uint freq, op_class;
     uint i;
     char country[8] = { 0 };
     bool is_ap_mode = false;
@@ -3055,7 +3055,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
 
             return WIFI_HAL_SUCCESS;
         }
-    }
+}
 
     wifi_hal_stats_dbg_print("%s:%d: [SCAN] oper_param.opclass:%d, oper_param.channel:%d\n", __func__,
         __LINE__, radio->oper_param.operatingClass, radio->oper_param.channel);
@@ -3087,8 +3087,8 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
             wifi_hal_stats_dbg_print(
                 "%s:%d: [SCAN] Requested ONCHAN scan for the current channel %u, freq %u\n",
                 __func__, __LINE__, chan_list[i], freq);
+            }
             break;
-        }
     }
 
     case WIFI_RADIO_SCAN_MODE_OFFCHAN: {
