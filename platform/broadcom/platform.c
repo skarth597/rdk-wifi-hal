@@ -342,12 +342,12 @@ int get_emu_neighbor_stats(uint radio_index, wifi_neighbor_ap2_t **neighbor_ap_a
 }
 #endif
 
-INT wifi_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, INT dwell_time, UINT chan_num, UINT *chan_list)
+/*INT wifi_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, INT dwell_time, UINT chan_num, UINT *chan_list)
 {
     return wifi_hal_startNeighborScan(apIndex, scan_mode, dwell_time, chan_num, chan_list);
-}
+}*/
 
-INT wifi_getNeighboringWiFiStatus(INT radio_index, wifi_neighbor_ap2_t **neighbor_ap_array,
+/*INT wifi_getNeighboringWiFiStatus(INT radio_index, wifi_neighbor_ap2_t **neighbor_ap_array,
     UINT *output_array_size)
 {
     int ret;
@@ -365,7 +365,7 @@ INT wifi_getNeighboringWiFiStatus(INT radio_index, wifi_neighbor_ap2_t **neighbo
     }
 #endif
     return ret;
-}
+}*/
 
 int sta_disassociated(int ap_index, char *mac, int reason)
 {
