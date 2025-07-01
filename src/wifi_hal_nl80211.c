@@ -598,7 +598,8 @@ void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steeri
 
     radio = get_radio_by_rdk_index(interface->vap_info.radio_index);
 
-    if (radio->oper_param.band == WIFI_FREQUENCY_5_BAND) {
+    if (radio->oper_param.band == WIFI_FREQUENCY_5_BAND || radio->oper_param.band == WIFI_FREQUENCY_5L_BAND ||
+        radio->oper_param.band == WIFI_FREQUENCY_5H_BAND) {
         steering_event->bandCap5G = 1;
     } else if (radio->oper_param.band == WIFI_FREQUENCY_2_4_BAND) {
         steering_event->bandCap2G = 1;
@@ -3828,13 +3829,17 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
     struct rtnl_link *bridge, *device;
     char ovs_brname[IFNAMSIZ];
     bool is_hotspot_interface = false, is_lnf_psk_interface = false;
-    wifi_vap_info_t *vap_cfg;
+    bool is_mdu_enabled = false;
+    wifi_vap_info_t *vap_cfg = NULL;
 #if defined(VNTXER5_PORT)
     int ap_index;
 #endif
     is_hotspot_interface = is_wifi_hal_vap_hotspot_from_interfacename(if_name);
     vap_cfg = get_wifi_vap_info_from_interfacename(if_name);
-    is_lnf_psk_interface = is_wifi_hal_vap_lnf_psk(vap_cfg->vap_index);
+    if (vap_cfg) {
+        is_lnf_psk_interface = is_wifi_hal_vap_lnf_psk(vap_cfg->vap_index);
+        is_mdu_enabled = vap_cfg->u.bss_info.mdu_enabled;
+    }
 #if defined(VNTXER5_PORT)
     if (strncmp(if_name, "mld", 3) == 0) {
         sscanf(if_name + 3, "%d", &ap_index);
@@ -3844,9 +3849,10 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
 #endif
 
     wifi_hal_info_print("%s:%d: bridge:%s interface:%s is hotspot:%d is lnf_psk:%d is_mdu_enabled:%d vap_name = %s\n", __func__, __LINE__,
-        br_name, if_name, is_hotspot_interface, is_lnf_psk_interface, vap_cfg->u.bss_info.mdu_enabled, vap_cfg->vap_name);
+        br_name, if_name, is_hotspot_interface, is_lnf_psk_interface, is_mdu_enabled,
+        (vap_cfg != NULL)? vap_cfg->vap_name: "NULL");
 
-    if (access(OVS_MODULE, F_OK) == 0 && !is_hotspot_interface && !(is_lnf_psk_interface && vap_cfg->u.bss_info.mdu_enabled)) {
+    if (access(OVS_MODULE, F_OK) == 0 && !is_hotspot_interface && !(is_lnf_psk_interface && is_mdu_enabled)) {
         if (ovs_if_get_br(ovs_brname, if_name) == 0) {
             if (strcmp(br_name, ovs_brname) != 0) {
                 wifi_hal_dbg_print("%s:%d mismatch\n",  __func__, __LINE__);
@@ -3874,7 +3880,7 @@ int nl80211_create_bridge(const char *if_name, const char *br_name)
         return 0;
     }
 
-    if(is_lnf_psk_interface && vap_cfg->u.bss_info.mdu_enabled && (ovs_if_get_br(ovs_brname,if_name) == 0)) {
+    if(is_lnf_psk_interface && vap_cfg && is_mdu_enabled && (ovs_if_get_br(ovs_brname,if_name) == 0)) {
         int status = nl80211_remove_from_bridge(if_name);
         wifi_hal_info_print("%s:%d is_lnf_psk_interface && mdu_enabled for LnF interface:%s and have called the nl80211_remove_from_bridge from ovs_brname:%s with return status %d\n",  __func__, __LINE__, if_name,ovs_brname, status);
     }
@@ -8561,7 +8567,6 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
 #if !defined(CONFIG_WIFI_EMULATOR) && !defined(BANANA_PI_PORT)
     u32 ver = 0;
     u8 *pos, rsn_ie[128];
-    ieee80211_tlv_t *bh_rsn = NULL;
     struct wpa_auth_config wpa_conf = {0};
     struct wpa_ie_data data;
     struct nl_msg *msg;
@@ -8793,10 +8798,8 @@ int nl80211_connect_sta(wifi_interface_info_t *interface)
 
     pos = rsn_ie;
 
-    bh_rsn = (ieee80211_tlv_t *)get_ie(backhaul->ie, backhaul->ie_len, WLAN_EID_RSN);
-    if (bh_rsn &&
-        (wpa_parse_wpa_ie_rsn((const u8 *)bh_rsn, bh_rsn->length + sizeof(ieee80211_tlv_t),
-             &data) == 0)) {
+
+    if (backhaul->ie_len && (wpa_parse_wpa_ie_rsn(backhaul->ie, backhaul->ie_len, &data) == 0)) {
         wpa_conf.wpa_group = data.group_cipher;
         wpa_conf.rsn_pairwise = WPA_CIPHER_CCMP;
         if (data.key_mgmt & WPA_KEY_MGMT_NONE) {
@@ -9172,8 +9175,7 @@ static void parse_supprates(const uint8_t type, uint8_t len,
             if (bss->oper_freq_band & WIFI_FREQUENCY_5_BAND) {
                 bss->supp_standards |= WIFI_80211_VARIANT_A;
                 bss->oper_standards = WIFI_80211_VARIANT_A;
-            }
-            else{
+            } else {
                 bss->supp_standards |= WIFI_80211_VARIANT_G;
                 bss->oper_standards = WIFI_80211_VARIANT_G;
             }
@@ -9923,11 +9925,13 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
     mac_address_t   bssid;
     mac_addr_str_t  bssid_str = {0};
     wifi_vap_info_t *vap;
-    uint8_t *ie = NULL;
-    uint8_t *beacon_ies = NULL;
-    signed int len, beacon_ie_len = 0;
+    ieee80211_tlv_t *rsn_ie = NULL;
+    ieee80211_tlv_t *ie = NULL, *ie_ssid = NULL;
+    signed int len;
+    unsigned short ie_ssid_len;
     const char *key = NULL;
-    wifi_bss_info_t *scan_info_ap = NULL;
+    wifi_bss_info_t* scan_info_ap = NULL;
+    ssid_t          ssid = {0};
 
     interface = (wifi_interface_info_t *)arg;
     vap = &interface->vap_info;
@@ -9968,9 +9972,10 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
         return NL_SKIP;
     }
 
-    if (bss[NL80211_BSS_BEACON_IES]) {
-        beacon_ies = nla_data(bss[NL80211_BSS_BEACON_IES]);
-        beacon_ie_len = nla_len(bss[NL80211_BSS_BEACON_IES]);
+    if (get_ie_by_eid(WLAN_EID_SSID, (unsigned char *)ie, len, (unsigned char **)&ie_ssid, &ie_ssid_len) == true) {
+        size_t ssid_len = ie_ssid_len - sizeof(ieee80211_tlv_t);
+        if (ssid_len > sizeof(ssid_t)-1) ssid_len = sizeof(ssid_t)-1;
+        memcpy(ssid, ie_ssid->value, ssid_len);
     }
 
     // - create separate AP info entry for wifi_getNeighboringWiFiStatus().
@@ -9986,6 +9991,7 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
 
     // - update BSSID and SSID in AP scan results
     memcpy(scan_info_ap->bssid, bssid, sizeof(mac_address_t));
+    _COPY(scan_info_ap->ssid, ssid);
 
     // - freq / channel / band
     if (bss[NL80211_BSS_FREQUENCY]) {
@@ -9994,11 +10000,9 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
 
         if ( freq >= 5955 ) {
             scan_info_ap->oper_freq_band = WIFI_FREQUENCY_6_BAND;
-        }
-        else if( freq >= 5180 ) {
+        } else if( freq >= 5180 ) {
             scan_info_ap->oper_freq_band = WIFI_FREQUENCY_5_BAND;
-        }
-        else {
+        } else {
             scan_info_ap->oper_freq_band = WIFI_FREQUENCY_2_4_BAND;
         }
     }
@@ -10050,21 +10054,15 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
 #endif
 
     // - ies
-    uint32_t radio_index = 0;
-    wifi_convert_freq_band_to_radio_index(scan_info_ap->oper_freq_band, (int *)&radio_index);
-
-    if (ie) {
-        // Parse standard IEs including SSID
-        parse_ies(ie, len, scan_info_ap);
-    } else {
-        // Parse IEs from beacon IEs (including SSID)
-        parse_ies(beacon_ies, beacon_ie_len, scan_info_ap);
+    if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
+        parse_ies(nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]),
+            nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]), scan_info_ap);
     }
-
-    if (ie != NULL && len > 0) {
-        // Copy into IEs buffer
-        scan_info_ap->ie_len = len;
-        memcpy(scan_info_ap->ie, ie, scan_info_ap->ie_len);
+    else {
+        if (bss[NL80211_BSS_BEACON_IES]) {
+            parse_ies(nla_data(bss[NL80211_BSS_BEACON_IES]),
+                nla_len(bss[NL80211_BSS_BEACON_IES]), scan_info_ap);
+        }
     }
 
     if (vap->vap_mode == wifi_vap_mode_sta) {
@@ -10075,47 +10073,69 @@ static int scan_info_handler(struct nl_msg *msg, void *arg)
                         to_mac_str(bssid, bssid_str), scan_info_ap->rssi, scan_info_ap->freq, scan_info_ap->ssid);
             memcpy(vap->u.sta_info.bssid, bssid, sizeof(bssid_t));
 #if defined(CONFIG_WIFI_EMULATOR) || defined(BANANA_PI_PORT)
+            if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
+                uint32_t radio_index = 0;
+                uint32_t ie_len = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
+                wifi_convert_freq_band_to_radio_index(scan_info_ap->oper_freq_band,
+                    (int *)&radio_index);
+                wifi_ie_info_t *bss_ie = &interface->bss_elem_ie[radio_index];
 
-            wifi_ie_info_t *bss_ie = &interface->bss_elem_ie[radio_index];
-            wifi_ie_info_t *beacon_ie = &interface->beacon_elem_ie[radio_index];
+                if (bss_ie->buff == NULL) {
+                    bss_ie->buff = (unsigned char *)malloc(ie_len);
+                } else if (ie_len > bss_ie->buff_len) {
+                    bss_ie->buff = (unsigned char *)realloc(bss_ie->buff, ie_len);
+                }
+                if (bss_ie->buff != NULL) {
+                    bss_ie->buff_len = ie_len;
+                    memset(bss_ie->buff, 0, bss_ie->buff_len);
+                    memcpy(bss_ie->buff, nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]), bss_ie->buff_len);
 
-            // `realloc` mallocs a buffer of size 'beacon_ie_len' if buff == NULL
-            if (ie && (bss_ie->buff = (u8 *)realloc(bss_ie->buff, len)) != NULL) {
-
-                // ie and len previously parsed
-                bss_ie->buff_len = len;
-                memcpy(bss_ie->buff, ie, bss_ie->buff_len);
-
-                wifi_hal_stats_dbg_print("%s:%d: bss ie for radio:%d\n", __func__, __LINE__,
-                    radio_index);
-                wpa_hexdump(MSG_MSGDUMP, "SCAN_BSS_IE", bss_ie->buff, bss_ie->buff_len);
-            } else {
-                wifi_hal_stats_error_print("%s:%d bss ie not updated for radio:%d\r\n", __func__,
-                    __LINE__, radio_index);
-                bss_ie->buff_len = 0;
+                    wifi_hal_stats_dbg_print("%s:%d: bss ie for radio:%d\n", __func__, __LINE__, radio_index);
+                    wpa_hexdump(MSG_MSGDUMP, "SCAN_BSS_IE", bss_ie->buff, bss_ie->buff_len);
+                } else {
+                    wifi_hal_stats_error_print("%s:%d bss ie not updated for radio:%d\r\n", __func__, __LINE__, radio_index);
+                    bss_ie->buff_len = 0;
+                }
             }
+            if (bss[NL80211_BSS_BEACON_IES]) {
+                uint32_t radio_index = 0;
+                uint32_t beacon_ie_len = nla_len(bss[NL80211_BSS_BEACON_IES]);
+                wifi_convert_freq_band_to_radio_index(scan_info_ap->oper_freq_band,
+                    (int *)&radio_index);
+                wifi_ie_info_t *beacon_ie = &interface->beacon_elem_ie[radio_index];
 
-            if (beacon_ies &&
-                (beacon_ie->buff = (u8 *)realloc(beacon_ie->buff, beacon_ie_len)) != NULL) {
-
-                // ie and len previously parsed
-                bss_ie->buff_len = beacon_ie_len;
-                memcpy(bss_ie->buff, beacon_ies, bss_ie->buff_len);
-
-                wifi_hal_stats_dbg_print("%s:%d: bss ie for radio:%d\n", __func__, __LINE__,
-                    radio_index);
-                wpa_hexdump(MSG_MSGDUMP, "SCAN_BSS_IE", bss_ie->buff, bss_ie->buff_len);
-            } else {
-                wifi_hal_stats_error_print("%s:%d bss ie not updated for radio:%d\r\n", __func__,
-                    __LINE__, radio_index);
-                bss_ie->buff_len = 0;
+                if (beacon_ie->buff == NULL) {
+                    beacon_ie->buff = (unsigned char *)malloc(beacon_ie_len);
+                } else if (beacon_ie_len > beacon_ie->buff_len) {
+                    beacon_ie->buff = (unsigned char *)realloc(beacon_ie->buff, beacon_ie_len);
+                }
+                if (beacon_ie->buff != NULL) {
+                    beacon_ie->buff_len = beacon_ie_len;
+                    memset(beacon_ie->buff, 0, beacon_ie->buff_len);
+                    memcpy(beacon_ie->buff, nla_data(bss[NL80211_BSS_BEACON_IES]), beacon_ie->buff_len);
+                } else {
+                    wifi_hal_stats_error_print("%s:%d beacon ie not updated for radio:%d\r\n", __func__, __LINE__, radio_index);
+                    beacon_ie->buff_len = 0;
+                }
             }
 #endif
         }
     }
 
+    if (ie != NULL) {
+        // wifi_hal_dbg_print("[SCAN] RSN FOUND\n");
+        rsn_ie = (ieee80211_tlv_t *)get_ie((unsigned char*)ie, len, WLAN_EID_RSN);
+
+        if (rsn_ie != NULL) {
+            scan_info_ap->ie_len = rsn_ie->length + 2;
+            os_memcpy(scan_info_ap->ie, rsn_ie, scan_info_ap->ie_len);
+        } else {
+            // wifi_hal_dbg_print("[SCAN] RSN NOT FOUND\n");
+        }
+    }
+
     // - create or update the scan info in 'scan_info_map'
-    if (scan_info_ap->ssid[0] != '\0') {
+    if (ssid[0] != '\0') {
         wifi_hal_stats_dbg_print("%s:%d: [SCAN] found bss:%s rssi:%d ssid:%s on freq:%d \n",
             __func__, __LINE__, to_mac_str(bssid, bssid_str), scan_info_ap->rssi,
             scan_info_ap->ssid, scan_info_ap->freq);
