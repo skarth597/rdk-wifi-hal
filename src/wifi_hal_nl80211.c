@@ -7905,6 +7905,7 @@ int nl80211_disconnect_sta(wifi_interface_info_t *interface)
 }
 
 #if defined(TCXB7_PORT) || defined(TCXB8_PORT) || defined(XB10_PORT)
+#if defined(CONFIG_WIFI_EMULATOR)
 #define SEM_NAME "/semlock"
 
 int wifi_hal_emu_set_neighbor_stats(unsigned int radio_index, bool emu_state,
@@ -8537,6 +8538,7 @@ int wifi_hal_emu_set_radio_channel_stats(unsigned int radio_index, bool emu_stat
 
     return 0;
 }
+#endif /* CONFIG_WIFI_EMULATOR */
 #endif
 
 #if defined(CONFIG_WIFI_EMULATOR) || defined(BANANA_PI_PORT)
