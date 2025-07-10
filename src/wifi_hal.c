@@ -3032,7 +3032,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
         // - get the current channel
         //on_chan = radio->oper_param.channel;
         if (!chan_num || !chan_list) {
-            wifi_hal_stats_error_print("%s:%d: [SCAN] OFFCHAN needs chan_num and chan_list param\n",
+            wifi_hal_stats_error_print("%s:%d: [SCAN] ONCHAN needs chan_num and chan_list param\n",
                 __func__, __LINE__);
             return WIFI_HAL_INVALID_ARGUMENTS;
         }
