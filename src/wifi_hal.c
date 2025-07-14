@@ -3155,11 +3155,11 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
                     if (current_channel != 0) {
                         wifi_hal_stats_error_print(
                             "%s:%d: [SCAN] channel %u is invalid for radio %d\n", __func__,
-                            __LINE__, chan_list[i], radioIndex);
+                            __LINE__, current_channel, radioIndex);
                     } else {
                         wifi_hal_stats_error_print(
                             "%s:%d: [SCAN] channel %u is invalid for radio %d\n", __func__,
-                            __LINE__, current_channel, radioIndex);
+                            __LINE__, chan_list[i], radioIndex);
                     }
                     return WIFI_HAL_ERROR;
                 }
