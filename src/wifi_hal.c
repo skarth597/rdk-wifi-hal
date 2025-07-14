@@ -3035,9 +3035,8 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
 
         // - get the current channel
         if (chan_num != 0 || chan_list != NULL) {
-            wifi_hal_stats_error_print("%s:%d: [SCAN] OFFCHAN needs chan_num and chan_list param\n",
-                __func__, __LINE__);
-            return WIFI_HAL_INVALID_ARGUMENTS;
+            chan_num = 1;
+            chan_list[0] = radio->oper_param.channel;
         }
 
         // - allocate space for freq list
