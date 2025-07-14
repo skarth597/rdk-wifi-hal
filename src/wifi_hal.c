@@ -3079,14 +3079,13 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
         pthread_mutex_lock(&interface->scan_state_mutex);
         interface->scan_state = WIFI_SCAN_STATE_STARTED;
         pthread_mutex_unlock(&interface->scan_state_mutex);
+
+        // - scan_state is changed by nl80211_get_scan_results()
+        if (nl80211_get_scan_results(interface) != RETURN_OK)
+            return WIFI_HAL_ERROR;
+
+        return WIFI_HAL_SUCCESS;
     }
-
-    // - scan_state is changed by nl80211_get_scan_results()
-    if (nl80211_get_scan_results(interface) != RETURN_OK)
-        return WIFI_HAL_ERROR;
-
-    return WIFI_HAL_SUCCESS;
-}
 
     wifi_hal_stats_dbg_print("%s:%d: [SCAN] oper_param.opclass:%d, oper_param.channel:%d\n",
         __func__, __LINE__, radio->oper_param.operatingClass, radio->oper_param.channel);
