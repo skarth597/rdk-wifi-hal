@@ -3035,7 +3035,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
 
         // - get the current channel
         // on_chan = radio->oper_param.channel;
-        if (!chan_num || !chan_list) {
+        if (chan_num != 0 || chan_list != NULL) {
             wifi_hal_stats_error_print("%s:%d: [SCAN] ONCHAN needs chan_num and chan_list param\n",
                 __func__, __LINE__);
             return WIFI_HAL_INVALID_ARGUMENTS;
@@ -3063,13 +3063,13 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
             pthread_mutex_lock(&interface->scan_state_mutex);
             interface->scan_state = WIFI_SCAN_STATE_STARTED;
             pthread_mutex_unlock(&interface->scan_state_mutex);
-
-            // - scan_state is changed by nl80211_get_scan_results()
-            if (nl80211_get_scan_results(interface) != RETURN_OK)
-                return WIFI_HAL_ERROR;
-
-            return WIFI_HAL_SUCCESS;
         }
+
+        // - scan_state is changed by nl80211_get_scan_results()
+        if (nl80211_get_scan_results(interface) != RETURN_OK)
+            return WIFI_HAL_ERROR;
+
+        return WIFI_HAL_SUCCESS;
     }
 
     wifi_hal_stats_dbg_print("%s:%d: [SCAN] oper_param.opclass:%d, oper_param.channel:%d\n",
@@ -3158,7 +3158,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
 
     case WIFI_RADIO_SCAN_MODE_SELECT_CHANNELS: {
 
-        if (!chan_num || !chan_list) {
+        if (chan_num != 0 || chan_list != NULL) {
             wifi_hal_error_print("%s:%d: [SCAN] Needs chan_num and chan_list param\n", __func__,
                 __LINE__);
             return WIFI_HAL_INVALID_ARGUMENTS;
