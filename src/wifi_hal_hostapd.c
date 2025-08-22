@@ -284,6 +284,10 @@ void init_oem_config(wifi_interface_info_t *interface)
     conf->manufacturer_url = (char *)&interface->manufacturer_url;
     conf->model_description = (char *)&interface->model_description;
     conf->model_url = (char *)&interface->model_url;
+    conf->fw_version = malloc(strlen(interface->firmware_version) + 1);
+    if (conf->fw_version != NULL) {
+        strcpy(conf->fw_version, interface->firmware_version);
+    }
 
     if(wps_dev_type_str2bin("6-0050F204-1", conf->device_type)) {
         wifi_hal_dbg_print("%s:%d: WPS, invalid device_type\n", __func__, __LINE__);
@@ -337,6 +341,12 @@ int update_hostap_data(wifi_interface_info_t *interface)
     wifi_radio_info_t *radio;
 
     vap = &interface->vap_info;
+
+    if (vap->vap_mode != wifi_vap_mode_ap || is_wifi_hal_vap_mesh_sta(vap->vap_index)) {
+        wifi_hal_error_print("%s:%d: Not an AP based VAP. Returning error\n", __func__,
+            __LINE__);
+        return RETURN_ERR;
+    }
 
     radio = get_radio_by_rdk_index(vap->radio_index);
     iconf = &radio->iconf;
@@ -650,10 +660,19 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
     conf->rdkb_eap_request_timeout = sec->eap_req_timeout;
     conf->rdkb_eap_request_retries = sec->eap_req_retries;
 #endif
-    if (conf->ieee802_1x || is_open_sec_radius_auth(sec)) {
+    if (conf->ieee802_1x || is_open_sec_radius_auth(sec) || conf->mdu) {
+        wifi_radius_settings_t *radius_cfg;
+        if (conf->mdu) {
+            radius_cfg = &sec->repurposed_radius;
+            strcpy(conf->ssid.wpa_passphrase, sec->u.key.key);
+            conf->ssid.wpa_passphrase_set = true;
+            conf->osen = 0;
+            conf->wpa_psk_radius = PSK_RADIUS_DURING_4WAY_HS;
+        } else {
+            radius_cfg = &sec->u.radius;
+        }
         conf->disable_pmksa_caching = sec->disable_pmksa_caching;
-
-        if (sec->u.radius.ip == 0) {
+        if (radius_cfg->ip == 0) {
             wifi_hal_error_print("%s:%d:Invalid radius server IP configuration in VAP setting\n", __func__, __LINE__);
             return RETURN_ERR;
         }
@@ -686,9 +705,10 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
         // nas_identifier
         memset(output, '\0', sizeof(output));
         _syscmd("sh /usr/sbin/deviceinfo.sh -emac", output, sizeof(output));
-	if (output[strlen(output) - 1] == '\n') {
+	    if (output[strlen(output) - 1] == '\n') {
            output[strlen(output) - 1] = '\0';
         }
+
         conf->nas_identifier = strdup(output);
         wifi_hal_dbg_print("%s:%d, Updating NAS identifier %s\n", __func__, __LINE__, output);
         memset(output, '\0', sizeof(output));
@@ -696,61 +716,60 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
         conf->radius_auth_req_attr = hostapd_parse_radius_attr(output);
 
 #ifdef WIFI_HAL_VERSION_3_PHASE2
-        if (inet_ntop(AF_INET, &sec->u.radius.ip, test_ip, sizeof(test_ip))) {
+        if (inet_ntop(AF_INET, &radius_cfg->ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[0].addr.af = AF_INET;
-            conf->radius->auth_servers[0].addr.u.v4 = sec->u.radius.ip;
+            conf->radius->auth_servers[0].addr.u.v4 = radius_cfg->ip;
         }
 #ifdef CONFIG_IPV6
-        else if(inet_ntop(AF_INET6, &sec->u.radius.ip, test_ip, sizeof(test_ip))) {
+        else if(inet_ntop(AF_INET6, &radius_cfg->ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[0].addr.af = AF_INET6;
-            conf->radius->auth_servers[0].addr.u.v6 = sec->u.radius.ip;
+            conf->radius->auth_servers[0].addr.u.v6 = radius_cfg->ip;
         }
 #endif //CONFIG_IPV6
 #else  //WIFI_HAL_VERSION_3_PHASE2
-        if (inet_pton(AF_INET, (const char *)sec->u.radius.ip, &ipaddr)) {
+        if (inet_pton(AF_INET, (const char *)radius_cfg->ip, &ipaddr)) {
             conf->radius->auth_servers[0].addr.af = AF_INET;
             conf->radius->auth_servers[0].addr.u.v4 = ipaddr;
         }
 #ifdef CONFIG_IPV6
-        else if(inet_pton(AF_INET6, (const char *)sec->u.radius.ip, &ipaddrv6)) {
+        else if(inet_pton(AF_INET6, (const char *)radius_cfg->ip, &ipaddrv6)) {
             conf->radius->auth_servers[0].addr.af = AF_INET6;
             conf->radius->auth_servers[0].addr.u.v6 = ipaddrv6;
         }
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
-        strcpy(conf->radius->auth_servers[0].shared_secret, sec->u.radius.key);
+        strcpy(conf->radius->auth_servers[0].shared_secret, radius_cfg->key);
         conf->radius->auth_servers[0].shared_secret_len = strlen(conf->radius->auth_servers[0].shared_secret);
-        conf->radius->auth_servers[0].port = sec->u.radius.port;
-
-
+        conf->radius->auth_servers[0].port = radius_cfg->port;
+        
 #ifdef WIFI_HAL_VERSION_3_PHASE2
-        if (inet_ntop(AF_INET, &sec->u.radius.s_ip, test_ip, sizeof(test_ip))) {
+        if (inet_ntop(AF_INET, &radius_cfg->s_ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[1].addr.af = AF_INET;
-            conf->radius->auth_servers[1].addr.u.v4 = sec->u.radius.s_ip;
+            conf->radius->auth_servers[1].addr.u.v4 = radius_cfg->s_ip;
         }
 #ifdef CONFIG_IPV6
-        else if(inet_ntop(AF_INET6, &sec->u.radius.s_ip, test_ip, sizeof(test_ip))) {
+        else if(inet_ntop(AF_INET6, &radius_cfg->s_ip, test_ip, sizeof(test_ip))) {
             conf->radius->auth_servers[1].addr.af = AF_INET6;
-            conf->radius->auth_servers[1].addr.u.v6 = sec->u.radius.s_ip;
+            conf->radius->auth_servers[1].addr.u.v6 = radius_cfg->s_ip;
         }
 #endif //CONFIG_IPV6
 #else  //WIFI_HAL_VERSION_3_PHASE2
-        if (inet_pton(AF_INET, (const char *)&sec->u.radius.s_ip, &ipaddr)) {
+        if (inet_pton(AF_INET, (const char *)&radius_cfg->s_ip, &ipaddr)) {
             conf->radius->auth_servers[1].addr.af = AF_INET;
             conf->radius->auth_servers[1].addr.u.v4 = ipaddr;
         }
 #ifdef CONFIG_IPV6
-        else if(inet_pton(AF_INET6, (const char *)&sec->u.radius.s_ip, &ipaddrv6)) {
+        else if(inet_pton(AF_INET6, (const char *)&radius_cfg->s_ip, &ipaddrv6)) {
             conf->radius->auth_servers[1].addr.af = AF_INET6;
             conf->radius->auth_servers[1].addr.u.v6 = ipaddrv6;
         }
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
-        strcpy(conf->radius->auth_servers[1].shared_secret, sec->u.radius.s_key);
+        strcpy(conf->radius->auth_servers[1].shared_secret, radius_cfg->s_key);
         conf->radius->auth_servers[1].shared_secret_len = strlen(conf->radius->auth_servers[1].shared_secret);
-        conf->radius->auth_servers[1].port = sec->u.radius.s_port;
+        conf->radius->auth_servers[1].port = radius_cfg->s_port;
 
         if (is_open_sec_radius_auth(sec)) {
             conf->radius_das_port = sec->u.radius.dasport;
@@ -1049,6 +1068,8 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     //wme_enabled, uapsd_enabled
     conf->wmm_enabled = vap->u.bss_info.wmm_enabled;
     conf->wmm_uapsd = vap->u.bss_info.UAPSDEnabled;
+    
+    conf->mdu = vap->u.bss_info.mdu_enabled;
 
     if (update_security_config(&vap->u.bss_info.security, conf) == -1) {
         wifi_hal_error_print("%s:%d:update_security_config failed \n", __func__, __LINE__);
@@ -1086,8 +1107,10 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     // connected_building_enabled
     if (is_wifi_hal_vap_hotspot_from_interfacename(conf->iface)) {
         conf->connected_building_avp = vap->u.bss_info.connected_building_enabled;
-        wifi_hal_info_print("%s:%d:connected_building_enabled is %d  and ifacename is %s\n", __func__, __LINE__,conf->connected_building_avp,conf->iface);
+        wifi_hal_info_print("%s:%d:connected_building_enabled is %d and ifacename is %s\n", __func__, __LINE__,conf->connected_building_avp, conf->iface);
     }
+
+    conf->speed_tier = vap->u.bss_info.am_config.npc.speed_tier;
    // rdk_greylist
     conf->rdk_greylist = vap->u.bss_info.network_initiated_greylist;
     if(conf->rdk_greylist) {
@@ -1345,6 +1368,11 @@ int update_hostap_iface(wifi_interface_info_t *interface)
 #ifdef CONFIG_IEEE80211AX
     struct he_capabilities *drv_he_cap;
 #endif
+#ifdef CONFIG_IEEE80211BE
+#if HOSTAPD_VERSION >= 211
+    struct eht_capabilities *drv_eht_cap;
+#endif // HOSTAPD_VERSION >= 211
+#endif // CONFIG_IEEE80211BE
 
     if (interface == NULL) {
         return RETURN_ERR;
@@ -1565,7 +1593,7 @@ int update_hostap_iface(wifi_interface_info_t *interface)
         interface->u.ap.iface_initialized = true;
     }
 
-#if defined(CONFIG_HW_CAPABILITIES) || defined(VNTXER5_PORT)
+#if defined(CONFIG_HW_CAPABILITIES) || defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
     iface->drv_flags = radio->driver_data.capa.flags;
 #if HOSTAPD_VERSION >= 210
     iface->drv_flags2 = radio->driver_data.capa.flags2;
@@ -1585,7 +1613,7 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     hostapd_get_mld_capa(iface);
 #endif /* CONFIG_IEEE80211BE */
 #endif /* HOSTAPD_VERSION >= 211 */
-#endif // CONFIG_HW_CAPABILITIES || VNTXER5_PORT
+#endif // CONFIG_HW_CAPABILITIES || VNTXER5_PORT || TARGET_GEMINI7_2
 
 #if HOSTAPD_VERSION >= 210
     iface->mbssid_max_interfaces = radio->driver_data.capa.mbssid_max_interfaces;
@@ -1650,6 +1678,18 @@ int update_hostap_iface(wifi_interface_info_t *interface)
     }
 #endif
 #endif
+
+#ifdef CONFIG_IEEE80211BE
+#if HOSTAPD_VERSION >= 211
+    drv_eht_cap = &iface->current_mode->eht_capab[IEEE80211_MODE_AP];
+    iface->conf->eht_phy_capab.su_beamformer = !!(
+        drv_eht_cap->phy_cap[EHT_PHYCAP_SU_BEAMFORMER_IDX] & EHT_PHYCAP_SU_BEAMFORMER);
+    iface->conf->eht_phy_capab.su_beamformee = !!(
+        drv_eht_cap->phy_cap[EHT_PHYCAP_SU_BEAMFORMEE_IDX] & EHT_PHYCAP_SU_BEAMFORMEE);
+    iface->conf->eht_phy_capab.mu_beamformer = !!(
+        drv_eht_cap->phy_cap[EHT_PHYCAP_MU_BEAMFORMER_IDX] & EHT_PHYCAP_MU_BEAMFORMER_MASK);
+#endif // HOSTAPD_VERSION >= 211
+#endif // CONFIG_IEEE80211BE
 
     if(preassoc_supp_rates) {
       os_free(preassoc_supp_rates);
@@ -1984,12 +2024,13 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
     }
 
     if (param->variant & WIFI_80211_VARIANT_AX) {
-        if (param->band == WIFI_FREQUENCY_5_BAND) {
+        if (param->band == WIFI_FREQUENCY_5_BAND || param->band == WIFI_FREQUENCY_5L_BAND ||
+            param->band == WIFI_FREQUENCY_5H_BAND) {
             iconf->hw_mode = HOSTAPD_MODE_IEEE80211A;
             iconf->ieee80211ac = 1;
         } else if (param->band == WIFI_FREQUENCY_6_BAND) {
             iconf->hw_mode = HOSTAPD_MODE_IEEE80211A;
-       } else {
+        } else {
             iconf->hw_mode = HOSTAPD_MODE_IEEE80211G;
         }
         iconf->ieee80211ax = 1;
@@ -2155,9 +2196,11 @@ static void wpa_sm_sta_set_state(void *ctx, enum wpa_states state)
 
     if (state == WPA_COMPLETED) {
         nl80211_get_channel_bw_conn(interface);
+        wifi_hal_configure_sta_4addr_to_bridge(interface, 1);
     } else if (state == WPA_DISCONNECTED) {
         callbacks = get_hal_device_callbacks();
         
+        wifi_hal_configure_sta_4addr_to_bridge(interface, 0);
         if (callbacks->sta_conn_status_callback) {
             memcpy(&bss, &interface->u.sta.backhaul, sizeof(wifi_bss_info_t));
 
@@ -2535,7 +2578,32 @@ void update_wpa_sm_params(wifi_interface_info_t *interface)
             wpa_sm_set_param(sm, WPA_PARAM_PAIRWISE, WPA_CIPHER_NONE);
             wpa_sm_set_param(sm, WPA_PARAM_GROUP, WPA_CIPHER_NONE);
         } else {
-            sel = (WPA_KEY_MGMT_IEEE8021X | WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_PSK_SHA256 | wpa_key_mgmt_11w) & data.key_mgmt;
+#if defined(CONFIG_WIFI_EMULATOR)
+            if (sec->mode != wifi_security_mode_none) {
+                if (sec->mode == wifi_security_mode_wpa2_personal) {
+                    sel = (WPA_KEY_MGMT_PSK | wpa_key_mgmt_11w) & data.key_mgmt;
+                } else if (sec->mode == wifi_security_mode_wpa2_enterprise) {
+                    sel = (WPA_KEY_MGMT_IEEE8021X | wpa_key_mgmt_11w) & data.key_mgmt;
+                } else if (sec->mode == wifi_security_mode_wpa3_transition) {
+                    sel = (WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE | wpa_key_mgmt_11w) &
+                        data.key_mgmt;
+                } else if (sec->mode == wifi_security_mode_wpa3_personal) {
+                    sel = (WPA_KEY_MGMT_SAE | wpa_key_mgmt_11w) & data.key_mgmt;
+                } else if (sec->mode == wifi_security_mode_wpa3_enterprise) {
+                    sel = (WPA_KEY_MGMT_IEEE8021X_SHA256 | wpa_key_mgmt_11w) & data.key_mgmt;
+                } else if (sec->mode == wifi_security_mode_wpa3_compatibility) {
+                    sel = (WPA_KEY_MGMT_PSK | WPA_KEY_MGMT_SAE) & data.key_mgmt;
+                } else {
+                    wifi_hal_error_print("Unsupported security mode : 0x%x\n", sec->mode);
+                    return;
+                }
+            } else
+#endif
+            {
+                sel = (WPA_KEY_MGMT_SAE | WPA_KEY_MGMT_IEEE8021X | WPA_KEY_MGMT_PSK |
+                    WPA_KEY_MGMT_PSK_SHA256 | wpa_key_mgmt_11w) & data.key_mgmt;
+            }
+
             key_mgmt = pick_akm_suite(sel); 
 
             if (key_mgmt == -1) {
@@ -2546,8 +2614,8 @@ void update_wpa_sm_params(wifi_interface_info_t *interface)
             wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, key_mgmt);
         }
 
-        wifi_hal_dbg_print("update_wpa_sm_params%x %x %x\n", data.group_cipher, data.pairwise_cipher,
-            key_mgmt);
+        wifi_hal_dbg_print("%s:%d:%x %x %x\n", __func__, __LINE__, data.group_cipher,
+            data.pairwise_cipher, key_mgmt);
     } else {
         if (sec->mode == wifi_security_mode_none) {
             wpa_sm_set_param(sm, WPA_PARAM_KEY_MGMT, WPA_KEY_MGMT_NONE);
@@ -2830,7 +2898,7 @@ int start_bss(wifi_interface_info_t *interface)
     //my_print_hex_dump(conf->ssid.ssid_len, conf->ssid.ssid);
 #if HOSTAPD_VERSION >= 211 //2.11
     ret = hostapd_setup_bss(hapd, 1, true);
-#elif defined(VNTXER5_PORT) && (HOSTAPD_VERSION == 210) //2.10
+#elif (defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)) && (HOSTAPD_VERSION == 210) //2.10
     ret = hostapd_setup_bss(hapd, 1, true);
 #else
     ret = hostapd_setup_bss(hapd, 1);
