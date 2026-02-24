@@ -3524,41 +3524,7 @@ INT wifi_hal_startNeighborScan(INT apIndex, wifi_neighborScanMode_t scan_mode, I
         break;
     }
 
-    case WIFI_RADIO_SCAN_MODE_FULL: {
-        if (!is_ap_mode) {
-            wifi_hal_stats_error_print(
-                "%s:%d: [SCAN] Full mode is not supported for STA interface\n", __func__, __LINE__);
-            return WIFI_HAL_ERROR;
-        }
-
-        // - get list of channels (it is possible only in AP mode)
-#if OPTION_GET_CHANNELS_FROM_HOSTAP == 0
-        if (RETURN_OK != get_valid_freqs_list_from_radio(radio, &interface->scan_filter)) {
-            wifi_hal_stats_error_print("%s:%d: [SCAN] Couldn't get the freqs list for radio %d\n",
-                __func__, __LINE__, radioIndex);
-            return WIFI_HAL_ERROR;
-        }
-#else
-        pthread_mutex_lock(&g_wifi_hal.hapd_lock);
-        if (RETURN_OK !=
-            get_valid_freqs_list_from_hapd(&interface->u.ap.hapd, &interface->scan_filter)) {
-            pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
-            wifi_hal_stats_error_print("%s:%d: [SCAN] Couldn't get the freqs list for radio %d\n",
-                __func__, __LINE__, radioIndex);
-            return WIFI_HAL_ERROR;
-        }
-        pthread_mutex_unlock(&g_wifi_hal.hapd_lock);
-#endif // OPTION_GET_CHANNELS_FROM_HOSTAP
-
-        for (i = 0; i < interface->scan_filter.num; i++) {
-            uint chan = 0;
-            wifi_freq_to_channel(interface->scan_filter.values[i], &chan);
-            wifi_hal_stats_dbg_print("%s:%d: [SCAN] freq[%u]: %u (channel %u)\n", __func__,
-                __LINE__, i, interface->scan_filter.values[i], chan);
-        }
-        break;
-    }
-
+    case WIFI_RADIO_SCAN_MODE_FULL: 
     case WIFI_RADIO_SCAN_MODE_SELECT_CHANNELS: {
 
         if (chan_num == 0 || chan_list == NULL) {
