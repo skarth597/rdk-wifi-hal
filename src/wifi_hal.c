@@ -2862,6 +2862,28 @@ static int channel_is_valid_from_hapd(struct hostapd_data *hapd, unsigned channe
     return -1;
 }
 
+// - helper macro for copying string
+#define _COPY(out,s) ({ \
+    int res = wifi_strcpy(out, sizeof(out), s); \
+    if (res) wifi_hal_stats_error_print("%s:%d: string copying error!\n", __func__, __LINE__); \
+    res; \
+})
+
+// - helper macro for adding string to a comma-separated list
+#define _APPEND(out,s) ({ \
+    int res = str_list_append(out, sizeof(out), s); \
+    if (res) wifi_hal_stats_error_print("%s:%d: string adding error!\n", __func__, __LINE__); \
+    res; \
+})
+
+// - helper macro for string formatting
+#define _FORMAT(out, fmt, args...) ({ \
+    int res = snprintf(out, sizeof(out), fmt, ##args); \
+    res = ((res < 0) || (res >= sizeof(out))); \
+    if (res) wifi_hal_stats_error_print("%s:%d: string format error!\n", __func__, __LINE__); \
+    res; \
+})
+
 static int decode_bss_info_to_neighbor_ap_info(wifi_neighbor_ap2_t *ap, const wifi_bss_info_t *bss)
 {
     int ret = RETURN_OK;
