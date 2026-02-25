@@ -2862,6 +2862,8 @@ static int channel_is_valid_from_hapd(struct hostapd_data *hapd, unsigned channe
     return -1;
 }
 
+#endif // OPTION_GET_CHANNELS_FROM_HOSTAP
+
 // - helper macro for copying string
 #define _COPY(out,s) ({ \
     int res = wifi_strcpy(out, sizeof(out), s); \
