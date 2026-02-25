@@ -2858,7 +2858,7 @@ static int channel_is_valid_from_hapd(struct hostapd_data *hapd, unsigned channe
     return -1;
 }
 
-static int get_valid_freqs_list_from_hapd(struct hostapd_data *hapd, uint_array_t* freqs)
+/*static int get_valid_freqs_list_from_hapd(struct hostapd_data *hapd, uint_array_t* freqs)
 {
     int i;
     struct hostapd_iface *iface = hapd->iface;
@@ -2931,7 +2931,7 @@ static int get_valid_freqs_list_from_hapd(struct hostapd_data *hapd, uint_array_
     res = ((res < 0) || (res >= sizeof(out))); \
     if (res) wifi_hal_stats_error_print("%s:%d: string format error!\n", __func__, __LINE__); \
     res; \
-})
+})*/
 
 static int decode_bss_info_to_neighbor_ap_info(wifi_neighbor_ap2_t *ap, const wifi_bss_info_t *bss)
 {
