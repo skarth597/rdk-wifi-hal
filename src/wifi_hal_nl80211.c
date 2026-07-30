@@ -88,6 +88,7 @@ void wifi_drv_eapol_timeouts(wifi_interface_info_t *interface, mac_address_t sta
 #define KEY_MGMT_SAE_EXT 67108864
 #define MAX_MBSSID_INTERFACES 8
 #define BCME_BUSY -16
+#define BCME_EPERM -1
 
 #if defined(EASY_MESH_NODE) && defined(_PLATFORM_BANANAPI_R4_)
 #define CSA_TAG_ID 37
@@ -13332,7 +13333,7 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
     ret = nl80211_send_and_recv(msg, NULL, NULL, NULL, NULL);
     if (ret) {
         /* Skip the error print when BCME_BUSY -16 is returned on a non-private VAP */
-        if ((ret != BCME_BUSY) ||
+        if (((ret != BCME_BUSY) || (ret != BCME_EPERM)) ||
             (strncmp(vap->vap_name, "private_ssid_", sizeof("private_ssid_") - 1) == 0)) {
             wifi_hal_info_print("nl80211: switch_channel failed err=%d (%s)\n", ret,
                 strerror(-ret));
