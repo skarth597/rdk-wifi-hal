@@ -87,6 +87,7 @@ void wifi_drv_eapol_timeouts(wifi_interface_info_t *interface, mac_address_t sta
 #define ONEWIFI_TESTSUITE_TMPFILE "/tmp/onewifi_testsuite_configured"
 #define KEY_MGMT_SAE_EXT 67108864
 #define MAX_MBSSID_INTERFACES 8
+#define BCME_BUSY -16
 
 #if defined(EASY_MESH_NODE) && defined(_PLATFORM_BANANAPI_R4_)
 #define CSA_TAG_ID 37
@@ -13202,8 +13203,10 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
     int csa_off_len = 0;
     int i;
     wifi_interface_info_t *interface;
+    wifi_vap_info_t *vap;
 
     interface = (wifi_interface_info_t *)priv;
+    vap = &interface->vap_info;
 
     wifi_hal_info_print("%s:%d: channel switch request (cs_count=%u block_tx=%u freq=%d width=%d cf1=%d cf2=%d)\n",
         __func__, __LINE__, settings->cs_count, settings->block_tx, settings->freq_params.freq,
@@ -13324,7 +13327,12 @@ int wifi_drv_switch_channel(void *priv, struct csa_settings *settings)
 
     ret = nl80211_send_and_recv(msg, NULL, NULL, NULL, NULL);
     if (ret) {
-        wifi_hal_info_print("nl80211: switch_channel failed err=%d (%s)\n", ret, strerror(-ret));
+        /* Skip the error print when BCME_BUSY -16 is returned on a non-private VAP */
+        if ((ret != BCME_BUSY) ||
+            (strncmp(vap->vap_name, "private_ssid_", sizeof("private_ssid_") - 1) == 0)) {
+            wifi_hal_info_print("nl80211: switch_channel failed err=%d (%s)\n", ret,
+                strerror(-ret));
+        }
     }
     return ret;
 
