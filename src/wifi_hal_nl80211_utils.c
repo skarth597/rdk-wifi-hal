@@ -48,8 +48,6 @@ static wifi_interface_name_idex_map_t *interface_index_map = NULL;
 #define MAX_CLIENTS 3
 #else
 #define INTERFACE_MAP_JSON "/nvram/InterfaceMap.json"
-#define TMP_INTERFACE_MAP_JSON "/tmp/InterfaceMap.json"
-
 static unsigned int interface_index_map_size;
 
 static wifi_interface_name_idex_map_t static_interface_index_map[] = {
@@ -5637,21 +5635,16 @@ static inline int json_parse_interface_map(cJSON *json)
 
 static inline int init_json_interface_map(void)
 {
-    FILE *fp = NULL;
+    FILE *fp;
     cJSON *json;
     size_t len;
     int ret;
 
-    fp = fopen(TMP_INTERFACE_MAP_JSON, "r");
-
+    fp = fopen(INTERFACE_MAP_JSON, "r");
     if (fp == NULL) {
-        fp = fopen(INTERFACE_MAP_JSON, "r");
-        if (fp == NULL) {
-            wifi_hal_error_print(
-                "%s:%d: Failed (err=%d, msg=%s) to opening interface map file:%s\n", __func__,
-                __LINE__, errno, strerror(errno), INTERFACE_MAP_JSON);
-            return -1;
-        }
+        wifi_hal_error_print("%s:%d: Failed (err=%d, msg=%s) to opening interface map file:%s\n",
+            __func__, __LINE__, errno, strerror(errno), INTERFACE_MAP_JSON);
+        return -1;
     }
 
     fseek(fp, 0, SEEK_END);
