@@ -1157,8 +1157,10 @@ int update_hostap_bss(wifi_interface_info_t *interface)
     conf->disable_11be = !radio->iconf.ieee80211be;
 #endif /* CONFIG_IEEE80211BE */
 
-    snprintf(conf->iface, sizeof(conf->iface), "%s", interface->name);
-    snprintf(conf->bridge, sizeof(conf->bridge), "%s", interface->bridge);
+    memset(conf->iface, 0, sizeof(conf->iface));
+    memset(conf->bridge, 0, sizeof(conf->bridge));
+    strncpy(conf->iface, interface->name, sizeof(conf->iface) - 1);
+    strncpy(conf->bridge, interface->bridge, sizeof(conf->bridge) - 1);
     sprintf(conf->vlan_bridge, "vlan%d", vap->vap_index);
 
     conf->ctrl_interface = interface->ctrl_interface;
@@ -2279,6 +2281,9 @@ int update_hostap_config_params(wifi_radio_info_t *radio)
 int update_hostap_interface_params(wifi_interface_info_t *interface)
 {
     int ret = RETURN_ERR;
+    if (unlikely(interface == NULL)) {
+        return ret;
+    }
 
 #ifdef CONFIG_GENERIC_MLO
     if (wifi_hal_is_mld_enabled(interface)) {
