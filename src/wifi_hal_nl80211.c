@@ -211,6 +211,11 @@ typedef enum {
 #define RATE_LIMIT_MAX_VIOLATION 5
 #define RATE_LIMIT_RSSI_THRESHOLD -80
 
+static pthread_mutex_t nl_port_bitmap_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_key_t nl_thread_socket_key;
+static pthread_once_t nl_thread_socket_key_once = PTHREAD_ONCE_INIT;
+static int nl_thread_socket_key_status;
+
 #define RL_AUTH       (1 << 0)
 #define RL_ASSOC      (1 << 1)
 #define RL_REASSOC    (1 << 2)
@@ -231,7 +236,24 @@ typedef struct rate_limit_entry {
     int16_t avg_rssi;
 } rate_limit_entry_t;
 
-void prepare_interface_fdset(wifi_hal_priv_t *priv)
+static int fdset_add_checked(fd_set *fds, int fd, const char *name)
+{
+    if (fd < 0) {
+        wifi_hal_error_print("%s: %s has invalid fd %d\n", __func__, name, fd);
+        return -1;
+    }
+
+    if (fd >= FD_SETSIZE) {
+        wifi_hal_error_print("%s: %s fd %d exceeds FD_SETSIZE %d\n", __func__, name, fd,
+            FD_SETSIZE);
+        return -1;
+    }
+
+    FD_SET(fd, fds);
+    return 0;
+}
+
+static int prepare_interface_fdset(wifi_hal_priv_t *priv)
 {
     wifi_radio_info_t *radio;
     wifi_interface_info_t *interface;
@@ -242,11 +264,15 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
 #endif
     
     FD_ZERO(&priv->drv_rfds);
-    FD_SET(priv->nl_event_fd, &priv->drv_rfds);
-    FD_SET(priv->link_fd, &priv->drv_rfds);
+    if (fdset_add_checked(&priv->drv_rfds, priv->nl_event_fd, "nl_event") != 0 ||
+        fdset_add_checked(&priv->drv_rfds, priv->link_fd, "link") != 0) {
+        return -1;
+    }
 
     if (priv->ignite_sta_sock_fd > 0) {
-        FD_SET(priv->ignite_sta_sock_fd, &priv->drv_rfds);
+        if (fdset_add_checked(&priv->drv_rfds, priv->ignite_sta_sock_fd, "ignite_sta") != 0) {
+            return -1;
+        }
     }
 
     for (i = 0; i < priv->num_radios; i++) {
@@ -262,22 +288,33 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
                           vap->u.sta_info.ignite_enabled)) {
                         sock_fd = (vap->vap_mode == wifi_vap_mode_ap) ?
                             interface->u.ap.br_sock_fd : interface->u.sta.sta_sock_fd;
-                        FD_SET(sock_fd, &priv->drv_rfds);
+                        if (fdset_add_checked(&priv->drv_rfds, sock_fd, "data_frame") != 0) {
+                            return -1;
+                        }
                     }
                 }
 #endif
                 if (interface->vap_info.vap_mode != wifi_vap_mode_monitor) {
 #ifdef EAPOL_OVER_NL
                     if (interface->bss_frames_registered == 1) {
-                        FD_SET(interface->bss_nl_connect_event_fd, &priv->drv_rfds);
+                        if (fdset_add_checked(&priv->drv_rfds,
+                                interface->bss_nl_connect_event_fd, "bss_event") != 0) {
+                            return -1;
+                        }
                     }
 #endif
                     if (interface->mgmt_frames_registered == 1) {
-                        FD_SET(interface->nl_event_fd, &priv->drv_rfds);
+                        if (fdset_add_checked(&priv->drv_rfds, interface->nl_event_fd,
+                                "management_event") != 0) {
+                            return -1;
+                        }
                     }
                     if (interface->spurious_frames_registered == 1 &&
                         interface->spurious_nl_event_fd >= 0) {
-                        FD_SET(interface->spurious_nl_event_fd, &priv->drv_rfds);
+                        if (fdset_add_checked(&priv->drv_rfds,
+                                interface->spurious_nl_event_fd, "spurious_event") != 0) {
+                            return -1;
+                        }
                     }
                 }
             }
@@ -286,7 +323,15 @@ void prepare_interface_fdset(wifi_hal_priv_t *priv)
         }
 
     }
+    int eloop_fd = eloop_sock_table_read_get_biggest_fd();
+    if (eloop_fd >= FD_SETSIZE) {
+        wifi_hal_error_print("%s: eloop fd %d exceeds FD_SETSIZE %d\n", __func__, eloop_fd,
+            FD_SETSIZE);
+        return -1;
+    }
+
     eloop_sock_table_read_set_fds(&priv->drv_rfds);
+    return 0;
 }
 
 int get_biggest_in_fdset(wifi_hal_priv_t *priv)
@@ -345,6 +390,9 @@ int get_biggest_in_fdset(wifi_hal_priv_t *priv)
         sock_fd = eloop_sock_fd;
     }
     //wifi_hal_dbg_print("%s:%d:Biggest descriptor:%d\n", __func__, __LINE__, fd);
+    if (sock_fd >= FD_SETSIZE) {
+        return -1;
+    }
     return sock_fd;
 }
 
@@ -3587,7 +3635,11 @@ void *nl_recv_func(void *arg)
 
     while (1) {
 
-        prepare_interface_fdset(priv);
+        if (prepare_interface_fdset(priv) != 0) {
+            wifi_hal_error_print("%s:%d: refusing to select on descriptors outside fd_set\n",
+                __func__, __LINE__);
+            return NULL;
+        }
 
         eloop_timeout_ms = eloop_get_timeout_ms();
         if (eloop_timeout_ms >= 0) {
@@ -3598,7 +3650,14 @@ void *nl_recv_func(void *arg)
             tv_towait.tv_usec = 0;
         }
 
-        ret = select(get_biggest_in_fdset(priv) + 1, &priv->drv_rfds, NULL, NULL, &tv_towait);
+        ret = get_biggest_in_fdset(priv);
+        if (ret < 0 || ret >= FD_SETSIZE) {
+            wifi_hal_error_print("%s:%d: invalid maximum descriptor for select: %d\n", __func__,
+                __LINE__, ret);
+            return NULL;
+        }
+
+        ret = select(ret + 1, &priv->drv_rfds, NULL, NULL, &tv_towait);
         if (ret < 0) {
             if ((errno == EINTR) || (errno == EBADF)) {
                 continue;
@@ -3769,24 +3828,35 @@ static int error_handler(struct sockaddr_nl *nla, struct nlmsgerr *err,
 }
 
 
+static void handle_destroy(struct nl_handle *handle);
+
 static void nl_destroy_handles(struct nl_handle **handle)
 {
     if (*handle == NULL)
         return;
 
-    nl_socket_free((struct nl_sock *)*handle);
+    handle_destroy(*handle);
 
     *handle = NULL;
 }
 
 static void handle_destroy(struct nl_handle *handle)
 {
-    uint32_t port = nl_socket_get_local_port((const struct nl_sock *)handle);
+    uint32_t port;
 
+    if (handle == NULL) {
+        return;
+    }
+
+    pthread_mutex_lock(&nl_port_bitmap_lock);
+    port = nl_socket_get_local_port((const struct nl_sock *)handle);
     port >>= 22;
-    g_wifi_hal.port_bitmap[port / 32] &= ~(1 << (port % 32));
+    if (port < 1024) {
+        g_wifi_hal.port_bitmap[port / 32] &= ~(1U << (port % 32));
+    }
 
     nl_socket_free((struct nl_sock *)handle);
+    pthread_mutex_unlock(&nl_port_bitmap_lock);
 }
 
 struct nl_handle *nl_create_handle(struct nl_cb *cb, const char *dbg)
@@ -3794,6 +3864,7 @@ struct nl_handle *nl_create_handle(struct nl_cb *cb, const char *dbg)
     struct nl_handle *handle;
     uint32_t pid = getpid() & 0x3FFFFF;
     int i;
+    bool port_allocated = false;
 
     handle = (struct nl_handle *)nl_socket_alloc_cb(cb);
     if (handle == NULL) {
@@ -3802,13 +3873,22 @@ struct nl_handle *nl_create_handle(struct nl_cb *cb, const char *dbg)
     }
 
 
+    pthread_mutex_lock(&nl_port_bitmap_lock);
     for (i = 0; i < 1024; i++) {
-        if (g_wifi_hal.port_bitmap[i / 32] & (1 << (i % 32))) {
+        if (g_wifi_hal.port_bitmap[i / 32] & (1U << (i % 32))) {
             continue;
         }
-        g_wifi_hal.port_bitmap[i / 32] |= 1 << (i % 32);
-        pid += i << 22;
+        g_wifi_hal.port_bitmap[i / 32] |= 1U << (i % 32);
+        pid += ((uint32_t)i) << 22;
+        port_allocated = true;
         break;
+    }
+    pthread_mutex_unlock(&nl_port_bitmap_lock);
+
+    if (!port_allocated) {
+        wifi_hal_error_print("%s:%d: no free netlink port slots (%s)\n", __func__, __LINE__, dbg);
+        nl_socket_free((struct nl_sock *)handle);
+        return NULL;
     }
 
     nl_socket_set_local_port((struct nl_sock *)handle, pid);
@@ -3849,6 +3929,27 @@ static wifi_netlink_thread_info_t *create_nl80211_socket()
     nl_socket_disable_seq_check((struct nl_sock *)netlink_info->nl);
 
     return netlink_info;
+}
+
+static void destroy_thread_nl_socket(void *data)
+{
+    wifi_netlink_thread_info_t *netlink_info = data;
+
+    if (netlink_info == NULL) {
+        return;
+    }
+
+    nl_destroy_handles(&netlink_info->nl);
+    if (netlink_info->nl_cb != NULL) {
+        nl_cb_put(netlink_info->nl_cb);
+    }
+    free(netlink_info);
+}
+
+static void create_nl_thread_socket_key(void)
+{
+    nl_thread_socket_key_status = pthread_key_create(&nl_thread_socket_key,
+        destroy_thread_nl_socket);
 }
 
 static void nl80211_nlmsg_clear(struct nl_msg *msg)
@@ -4030,17 +4131,34 @@ int nl80211_send_and_recv(struct nl_msg *msg,
 {
     char thread_id[24];
     wifi_netlink_thread_info_t *nl_info = NULL;
+    int key_status;
 
     snprintf(thread_id, sizeof(thread_id), "%lu", pthread_self());
 
-    pthread_mutex_lock(&g_wifi_hal.nl_create_socket_lock);
-    nl_info = hash_map_get(g_wifi_hal.netlink_socket_map, thread_id);
+    key_status = pthread_once(&nl_thread_socket_key_once, create_nl_thread_socket_key);
+    if (key_status != 0 || nl_thread_socket_key_status != 0) {
+        wifi_hal_error_print("%s:%d: Failed to initialize thread netlink socket cleanup\n",
+            __func__, __LINE__);
+        nlmsg_free(msg);
+        return -1;
+    }
+
+    nl_info = pthread_getspecific(nl_thread_socket_key);
     if (!nl_info) {
-        if ((nl_info = create_nl80211_socket())) {
-            hash_map_put(g_wifi_hal.netlink_socket_map, strdup(thread_id), nl_info);
+        pthread_mutex_lock(&g_wifi_hal.nl_create_socket_lock);
+        nl_info = hash_map_get(g_wifi_hal.netlink_socket_map, thread_id);
+        pthread_mutex_unlock(&g_wifi_hal.nl_create_socket_lock);
+
+        if (!nl_info && (nl_info = create_nl80211_socket())) {
+            int set_status = pthread_setspecific(nl_thread_socket_key, nl_info);
+            if (set_status != 0) {
+                wifi_hal_error_print("%s:%d: Failed to register thread netlink socket: %s\n",
+                    __func__, __LINE__, strerror(set_status));
+                destroy_thread_nl_socket(nl_info);
+                nl_info = NULL;
+            }
         }
     }
-    pthread_mutex_unlock(&g_wifi_hal.nl_create_socket_lock);
 
     if (!nl_info) {
         wifi_hal_error_print("%s:%d: Failed to create netlink socket for thread %s\n",
